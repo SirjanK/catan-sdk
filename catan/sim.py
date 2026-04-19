@@ -173,7 +173,13 @@ def _run_single_game(
         try:
             p = cls(player_id=0)
         except TypeError:
-            p = cls(0)
+            try:
+                p = cls(0)
+            except Exception as exc:
+                raise RuntimeError(
+                    f"Could not instantiate {class_name} from {module_path}. "
+                    f"Expected __init__(self, player_id, seed=0) signature. Error: {exc}"
+                ) from exc
         players.append(p)
         names.append(name)
 
@@ -200,24 +206,21 @@ def _run_single_game(
     result = engine.run_game(players, logger=logger, player_names=names, board=board)
 
     if logger:
-        log_path = os.path.join(log_dir, f"{logger._game_id}.jsonl") if logger._game_id else None
-        if logger._file is not None:
-            logger._file.close()
-            logger._file = None
+        log_path = os.path.join(log_dir, f"{logger.game_id}.jsonl") if logger.game_id else None
+        logger.close()
 
-    # Compute placements from final VP
+    # Compute placements from final VP (standard competition ranking: ties share rank,
+    # next rank skips — e.g. two players tied for 2nd → both get rank 2, next is rank 4).
     final_vp = result.final_vp
     sorted_players = sorted(final_vp.keys(), key=lambda pid: -final_vp[pid])
     placements = {}
-    rank = 1
     prev_vp = None
-    prev_rank = 1
     for i, pid in enumerate(sorted_players):
         vp = final_vp[pid]
         if vp != prev_vp:
             rank = i + 1
+            prev_vp = vp
         placements[pid] = rank
-        prev_vp = vp
 
     return {
         "game_index": game_index,

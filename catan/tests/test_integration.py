@@ -286,3 +286,127 @@ class TestGameLogging:
             roll_sequences.append(rolls)
 
         assert roll_sequences[0] == roll_sequences[1]
+
+
+# ---------------------------------------------------------------------------
+# Turn limit
+# ---------------------------------------------------------------------------
+
+
+class TestTurnLimit:
+    """Verify engine behaviour when max_turns is hit before any player wins."""
+
+    def test_hit_turn_limit_flag_set(self):
+        import types
+        cfg = types.SimpleNamespace(
+            seed=0,
+            game_id=None,
+            limits=types.SimpleNamespace(max_turns=1, max_invalid_actions=3),
+            timeouts_ms=None,
+        )
+        players = [BasicPlayer(i) for i in range(4)]
+        result = CatanEngine(config=cfg).run_game(players)
+        assert result.hit_turn_limit is True
+
+    def test_hit_turn_limit_winner_is_none(self):
+        import types
+        cfg = types.SimpleNamespace(
+            seed=0,
+            game_id=None,
+            limits=types.SimpleNamespace(max_turns=1, max_invalid_actions=3),
+            timeouts_ms=None,
+        )
+        players = [BasicPlayer(i) for i in range(4)]
+        result = CatanEngine(config=cfg).run_game(players)
+        assert result.winner_id is None
+        assert result.winner_vp is None
+
+    def test_hit_turn_limit_final_vp_present(self):
+        """final_vp must still have 4 entries when the turn limit fires."""
+        import types
+        cfg = types.SimpleNamespace(
+            seed=0,
+            game_id=None,
+            limits=types.SimpleNamespace(max_turns=1, max_invalid_actions=3),
+            timeouts_ms=None,
+        )
+        players = [BasicPlayer(i) for i in range(4)]
+        result = CatanEngine(config=cfg).run_game(players)
+        assert len(result.final_vp) == 4
+
+    def test_hit_turn_limit_logged_correctly(self, tmp_path):
+        """game_end record should reflect hit_turn_limit=True."""
+        import types
+        cfg = types.SimpleNamespace(
+            seed=0,
+            game_id=None,
+            limits=types.SimpleNamespace(max_turns=1, max_invalid_actions=3),
+            timeouts_ms=None,
+        )
+        logger = GameLogger(log_dir=str(tmp_path))
+        players = [BasicPlayer(i) for i in range(4)]
+        CatanEngine(config=cfg).run_game(players, logger=logger)
+        game_file = next(f for f in tmp_path.glob("*.jsonl") if f.name != "index.jsonl")
+        records = _read_jsonl(game_file)
+        end = _records_of(records, "game_end")[0]
+        assert end["hit_turn_limit"] is True
+        assert end["winner_id"] is None
+
+
+# ---------------------------------------------------------------------------
+# Player names in logs
+# ---------------------------------------------------------------------------
+
+
+class TestPlayerNamesLogging:
+    """player_names kwarg should appear in the game_start record."""
+
+    def test_player_names_in_game_start(self, tmp_path):
+        names = ["Alice", "Bob", "Carol", "Dave"]
+        logger = GameLogger(log_dir=str(tmp_path))
+        players = [BasicPlayer(i) for i in range(4)]
+        CatanEngine(seed=1).run_game(players, logger=logger, player_names=names)
+        game_file = next(f for f in tmp_path.glob("*.jsonl") if f.name != "index.jsonl")
+        records = _read_jsonl(game_file)
+        start = _records_of(records, "game_start")[0]
+        assert start.get("player_names") == names
+
+    def test_no_player_names_key_when_omitted(self, tmp_path):
+        logger = GameLogger(log_dir=str(tmp_path))
+        players = [BasicPlayer(i) for i in range(4)]
+        CatanEngine(seed=1).run_game(players, logger=logger)
+        game_file = next(f for f in tmp_path.glob("*.jsonl") if f.name != "index.jsonl")
+        records = _read_jsonl(game_file)
+        start = _records_of(records, "game_start")[0]
+        assert "player_names" not in start
+
+
+# ---------------------------------------------------------------------------
+# Logger close() method
+# ---------------------------------------------------------------------------
+
+
+class TestLoggerClose:
+    """GameLogger.close() must be idempotent and release the file handle."""
+
+    def test_close_after_end_game_is_safe(self, tmp_path):
+        logger = GameLogger(log_dir=str(tmp_path))
+        players = [BasicPlayer(i) for i in range(4)]
+        CatanEngine(seed=5).run_game(players, logger=logger)
+        # end_game already closed; calling close() again should not raise
+        logger.close()
+        logger.close()  # idempotent
+
+    def test_close_before_start_is_safe(self, tmp_path):
+        logger = GameLogger(log_dir=str(tmp_path))
+        logger.close()  # should not raise even though no game was started
+
+    def test_game_id_accessible_after_start(self, tmp_path):
+        logger = GameLogger(log_dir=str(tmp_path))
+        gid = logger.start_game(seed=3, n_players=4, game_id="test-id")
+        assert logger.game_id == "test-id"
+        assert gid == "test-id"
+
+    def test_game_id_none_before_start(self, tmp_path):
+        logger = GameLogger(log_dir=str(tmp_path))
+        assert logger.game_id is None

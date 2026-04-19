@@ -1,18 +1,18 @@
 # catan-sdk
 
-A Python game engine and bot development toolkit for Catan. Build, test, and simulate bots locally, then register them for tournament play on the hosted site.
+A Python game engine and bot development toolkit for Catan. Build a bot locally, test it against the engine, simulate thousands of games, watch replays on the hosted site, and register for the tournament — all from the command line.
 
 ---
 
 ## Installation
 
-**For bot developers** (install directly from GitHub):
+**Bot developers** — install from GitHub:
 
 ```bash
 pip install "git+https://github.com/SirjanK/catan-sdk.git"
 ```
 
-**For local development of the SDK itself:**
+**SDK contributors** — clone and install in editable mode:
 
 ```bash
 git clone https://github.com/SirjanK/catan-sdk.git
@@ -22,11 +22,15 @@ pip install -e ".[dev]"
 
 ---
 
-## Quick Start
+## Building a Bot
 
-### 1. Implement your bot
+### 1. Implement the Player interface
 
-Copy `submissions/example_bot.py` as your starting template:
+Copy the example template and implement all seven methods:
+
+```bash
+cp submissions/example_bot.py submissions/my_bot.py
+```
 
 ```python
 # submissions/my_bot.py
@@ -38,28 +42,77 @@ class MyBot(Player):
     def __init__(self, player_id: int, seed: int = 0):
         self.player_id = player_id
 
-    def setup_place_settlement(self, state: GameState) -> PlaceSettlement:
-        ...
-
-    # implement all 7 methods
+    def setup_place_settlement(self, state: GameState) -> PlaceSettlement: ...
+    def setup_place_road(self, state, settlement_vid: int) -> PlaceRoad: ...
+    def pre_roll_action(self, state: GameState): ...       # RollDice or PlayKnight
+    def discard_cards(self, state, required: int): ...     # DiscardCards
+    def move_robber(self, state: GameState): ...           # MoveRobber
+    def take_turn(self, state: GameState): ...             # build / trade / Pass / …
+    def respond_to_trade(self, state, offer): ...         # AcceptTrade or RejectTrade
 ```
 
-### 2. Run the validator tests
+The `GameState` you receive is a **deep copy** — mutate it freely. Opponent resource hands and dev cards are hidden (zeroed out); all board state, VP counts, piece counts, and `resource_count` / `dev_cards_count` are public.
+
+See `catan/players/basic_player.py` for a complete reference implementation.
+
+### The 7 Player methods
+
+| Method | Phase | Return type |
+|--------|-------|-------------|
+| `setup_place_settlement(state)` | Setup | `PlaceSettlement` |
+| `setup_place_road(state, settlement_vid)` | Setup | `PlaceRoad` |
+| `pre_roll_action(state)` | Start of turn | `RollDice` or `PlayKnight` |
+| `discard_cards(state, required)` | After 7 rolled | `DiscardCards` |
+| `move_robber(state)` | After knight/7 | `MoveRobber` |
+| `take_turn(state)` | Main turn | Any valid action or `Pass` |
+| `respond_to_trade(state, offer)` | Any player's turn | `AcceptTrade` or `RejectTrade` |
+
+---
+
+### 2. Validate your bot
+
+Run the fixture test suite against your bot (31 tests covering every method and edge case):
 
 ```bash
 pytest catan/tests/test_dev_validator.py --player=submissions.my_bot:MyBot -v
 ```
 
-### 3. Play a game against the example bot
+Each failing test shows the scenario, what your bot returned, why it was rejected, and a hint to fix it.
+
+---
+
+### 3. Play a game
+
+Run your bot against the built-in reference bot and watch what happens:
 
 ```bash
 python -m catan.run catan/examples/four_basic_players.yaml
-# → writes a replay to tmp/games/<timestamp>.jsonl
+# → writes tmp/games/<timestamp>.jsonl
 ```
+
+To mix your bot in, edit the YAML:
+
+```yaml
+players:
+  - type: custom
+    module: submissions.my_bot
+    class: MyBot
+  - type: basic
+  - type: basic
+  - type: basic
+```
+
+---
 
 ### 4. Watch the replay
 
-Drag the `.jsonl` file into the hosted viewer at `https://<tournament-site>/viewer`. Step through every action with ← / → arrow keys.
+Drag the `.jsonl` file into the hosted viewer at `https://<tournament-site>/viewer`.
+
+- **Arrow keys** ← → step through actions frame by frame
+- **End** key jumps to the final game state
+- No login required
+
+---
 
 ### 5. Simulate many games
 
@@ -70,36 +123,55 @@ python -m catan.sim \
   --games 200 \
   --workers 4 \
   --save-logs
-# → writes per-game JSONLs to tmp/sim/<run>/
 ```
 
-Upload the `tmp/sim/<run>/` folder to the hosted viewer's **Batch Results** tab to browse and step through individual games.
-
-### 6. Package and register for the tournament
-
-```bash
-python -m catan.submit submissions.my_bot:MyBot    # → MyBot.zip
-python -m catan.register \
-  --url https://<tournament-site> \
-  --username player1 \
-  --zip MyBot.zip
 ```
+Results — 200 games, random boards
+Bot                       Games   Wins  Win%    Avg VP   Avg Place   1st   2nd   3rd   4th
+MyBot                       200     82  41.0%     7.6       1.8      41%   28%   21%   10%
+BasicPlayer                 200     38  19.0%     6.0       2.6      19%   24%   27%   30%
+
+Logs saved to: tmp/sim/run_20260419_120000/
+  View results: upload tmp/sim/run_20260419_120000/index.json to the tournament site's Viewer → Batch Results tab
+```
+
+**Key flags:**
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--games N` | 100 | Number of games |
+| `--workers N` | 1 | Parallel processes |
+| `--fixed-board` | off | Reuse one board across all games (isolates bot skill from board luck) |
+| `--board-seed N` | same as `--seed` | Seed for the fixed board |
+| `--save-logs` | off | Write per-game `.jsonl` files |
+| `--output FILE` | — | Write JSON summary to a file |
 
 ---
 
-## The 7 Player Methods
+### 6. Browse simulation results on the hosted viewer
 
-All bots must subclass `catan.player.Player` and implement these methods:
+Upload the `tmp/sim/<run>/` folder (or just `index.json`) to the **Batch Results** tab at `https://<tournament-site>/viewer`:
 
-| Method | Phase | Return Type |
-|--------|-------|-------------|
-| `setup_place_settlement(state)` | Setup | `PlaceSettlement` |
-| `setup_place_road(state)` | Setup | `PlaceRoad` |
-| `pre_roll_action(state)` | Start of turn | `RollDice` or `PlayKnight` |
-| `discard_cards(state)` | After 7 rolled | `DiscardCards` |
-| `move_robber(state)` | After knight/7 | `MoveRobber` |
-| `take_turn(state)` | Main turn | Any valid action (or `Pass`) |
-| `respond_to_trade(state, offer)` | Any player's turn | `AcceptTrade` or `RejectTrade` |
+- Sortable/filterable table of all games with winner, VP, and turn count
+- Click any game to step through it frame by frame inline
+
+---
+
+### 7. Package and register for the tournament
+
+```bash
+# Validate and package into a zip
+python -m catan.submit submissions.my_bot:MyBot    # → MyBot.zip
+
+# Upload to the tournament server
+python -m catan.register \
+  --url https://<tournament-site> \
+  --username player1 \
+  --zip MyBot.zip \
+  --name "My Bot v2"      # optional; defaults to zip filename stem
+```
+
+`catan.register` caches your JWT at `~/.catan/tokens.json` so you only need to enter your password once per day.
 
 ---
 
@@ -107,83 +179,34 @@ All bots must subclass `catan.player.Player` and implement these methods:
 
 ```
 catan-sdk/
+  submissions/
+    README.md           ← read this first
+    example_bot.py      ← copy this as your bot template
   catan/
-    player.py           ← Player ABC (implement this)
-    models/             ← Pydantic v2 models: enums, actions, GameState, board
+    player.py           ← Player ABC — implement this
+    models/             ← Pydantic v2 models (GameState, actions, enums, board)
     engine/
-      engine.py         ← CatanEngine: runs a full game
-      executor.py       ← Pure state mutation functions
-      validator.py      ← Pure action validation + cost constants
-      logger.py         ← GameLogger: writes JSONL replay files
-      dev_validator.py  ← 31 fixture tests for validating your bot
-    board/              ← Board generation and topology
+      engine.py         ← CatanEngine — runs a full game
+      executor.py       ← state mutation functions
+      validator.py      ← action validation + resource cost constants
+      logger.py         ← GameLogger — writes JSONL replay files
+      dev_validator.py  ← 31 fixture tests for bot validation
+    board/              ← board generation and topology
     players/
-      basic_player.py   ← Reference bot implementation
-      registry.py       ← Local bot registry for YAML-driven games
-    config.py           ← GameConfig, PlayerConfig (YAML-to-Pydantic)
+      basic_player.py   ← reference bot implementation
+      registry.py       ← local bot registry for YAML-driven games
+    config.py           ← GameConfig, PlayerConfig (YAML → Pydantic)
     run.py              ← `python -m catan.run` CLI
     sim.py              ← `python -m catan.sim` batch simulation CLI
-    submit.py           ← `python -m catan.submit` bot packager CLI
-    register.py         ← `python -m catan.register` tournament registration CLI
-    tests/              ← Engine tests (run these to check your bot)
+    submit.py           ← `python -m catan.submit` bot packager
+    register.py         ← `python -m catan.register` tournament registration
+    tests/              ← engine correctness tests
     examples/
       four_basic_players.yaml
-  submissions/
-    README.md           ← Read this first
-    example_bot.py      ← Copy this as your template
 ```
 
 ---
 
-## CLI Reference
+## Contributing to the engine
 
-### `python -m catan.run <config.yaml>`
-
-Run a single game from a YAML config. Writes a `.jsonl` replay to `tmp/games/`.
-
-### `python -m catan.sim`
-
-```
-Required:
-  --bot MODULE:CLASS      Bot to include (repeat for multiple bots)
-
-Optional:
-  --games N               Number of games (default: 100)
-  --seed N                Starting game seed (default: 0)
-  --workers N             Parallel worker processes (default: 1)
-  --fixed-board           Randomize board once, reuse across all games
-  --save-logs             Write per-game JSONL to --log-dir
-  --log-dir PATH          Where to save logs (default: tmp/sim/)
-  --output FILE           Write JSON summary to file
-  --quiet                 Suppress progress bar
-```
-
-### `python -m catan.submit MODULE:CLASS`
-
-Validates your bot and packages it as a `.zip` for upload.
-
-### `python -m catan.register`
-
-```
-Required:
-  --url URL               Tournament site URL
-  --username USERNAME     Your tournament account username
-  --zip FILE              Bot zip file from catan.submit
-
-Optional:
-  --name "Bot Name"       Display name (defaults to zip stem)
-```
-
-Caches your JWT so you don't need to re-enter your password on each run.
-
----
-
-## Hex Coordinate System
-
-The board uses **pointy-top axial coordinates**. Corner indices are clockwise from the top: 0=N, 1=NE, 2=SE, 3=S, 4=SW, 5=NW.
-
----
-
-## License
-
-See [LICENSE](LICENSE).
+See [CONTRIBUTING.md](CONTRIBUTING.md).
