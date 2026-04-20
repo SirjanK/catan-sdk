@@ -1,28 +1,33 @@
 """
 catan.register — CLI to upload a bot zip to the tournament server.
 
-Handles JWT authentication with a token cache so you only need to enter your
-password once per session (tokens expire after 24 h).
+Two authentication modes:
 
-Usage::
+  API token (recommended for CI/automation)::
 
-    # Package your bot first
-    python -m catan.submit submissions.my_bot:MyBot   # → MyBot.zip
+    python -m catan.register \\
+      --url https://tournament.example.com \\
+      --token ctn_abc123...  \\
+      --zip MyBot.zip
 
-    # Register it (prompts for password on first use; uses cached token after)
+    Generate a token at the tournament site: Settings → API Tokens.
+    Tokens do not expire and can be revoked at any time.
+
+  Username/password (interactive sessions)::
+
     python -m catan.register \\
       --url https://tournament.example.com \\
       --username player1 \\
       --zip MyBot.zip
 
-    # Override the display name
-    python -m catan.register \\
-      --url https://tournament.example.com \\
-      --username player1 \\
-      --zip MyBot.zip \\
-      --name "My Bot v2"
+    Prompts for your password once, caches the 24-hour JWT so subsequent
+    calls within the same day don't prompt again.
 
-Token cache: ~/.catan/tokens.json
+  JWT cache: ~/.catan/tokens.json
+
+Package your bot first::
+
+    python -m catan.submit submissions.my_bot:MyBot   # → MyBot.zip
 """
 
 from __future__ import annotations
@@ -39,9 +44,8 @@ from typing import Optional
 TOKEN_DIR = Path.home() / ".catan"
 TOKEN_FILE = TOKEN_DIR / "tokens.json"
 
-
 # ---------------------------------------------------------------------------
-# Token cache
+# JWT session-token cache  (username/password flow only)
 # ---------------------------------------------------------------------------
 
 
@@ -62,9 +66,8 @@ def _load_tokens() -> dict:
 def _save_tokens(tokens: dict) -> None:
     TOKEN_DIR.mkdir(parents=True, exist_ok=True)
     TOKEN_FILE.write_text(json.dumps(tokens, indent=2))
-    # Restrict to owner-only on Unix-like systems
     try:
-        TOKEN_FILE.chmod(0o600)
+        TOKEN_FILE.chmod(0o600)  # owner-only on Unix-like systems
     except Exception:
         pass
 
@@ -181,7 +184,11 @@ def upload_bot(url: str, token: str, zip_path: str, name: str) -> dict:
         sys.exit(1)
 
     if resp.status_code == 401:
-        print("Error: Authentication failed. Try running with a fresh login.", file=sys.stderr)
+        print(
+            "Error: Authentication failed. "
+            "Check that your token is valid and has not been revoked.",
+            file=sys.stderr,
+        )
         sys.exit(1)
     if not resp.ok:
         try:
@@ -206,32 +213,69 @@ def main(argv=None) -> None:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=__doc__,
     )
-    parser.add_argument("--url", required=True,
-                        help="Base URL of the tournament server (e.g. https://tournament.example.com).")
-    parser.add_argument("--username", required=True,
-                        help="Your account username.")
-    parser.add_argument("--zip", required=True, dest="zip_path",
-                        help="Path to the bot zip produced by 'python -m catan.submit'.")
-    parser.add_argument("--name", default=None,
-                        help="Display name for the bot (default: zip filename stem).")
+    parser.add_argument(
+        "--url", required=True,
+        help="Base URL of the tournament server (e.g. https://tournament.example.com).",
+    )
+    parser.add_argument(
+        "--zip", required=True, dest="zip_path",
+        help="Path to the bot zip produced by 'python -m catan.submit'.",
+    )
+    parser.add_argument(
+        "--name", default=None,
+        help="Display name for the bot (default: zip filename stem).",
+    )
+
+    # ── Authentication: token OR username (mutually exclusive) ───────────────
+    auth_group = parser.add_mutually_exclusive_group()
+    auth_group.add_argument(
+        "--token",
+        default=None,
+        help=(
+            "Long-lived API token (starts with 'ctn_'). "
+            "Generate one at the tournament site under Settings → API Tokens. "
+            "Preferred for CI/automation — no password prompt."
+        ),
+    )
+    auth_group.add_argument(
+        "--username",
+        default=None,
+        help=(
+            "Your account username. Triggers an interactive password prompt "
+            "unless a valid cached JWT is found in ~/.catan/tokens.json."
+        ),
+    )
 
     args = parser.parse_args(argv)
 
-    # Derive default name from zip filename
+    # Validate: at least one auth method must be supplied.
+    if args.token is None and args.username is None:
+        parser.error("Supply either --token or --username.")
+
     bot_name = args.name or Path(args.zip_path).stem
-
-    # Token flow
     base_url = args.url.rstrip("/")
-    token = load_token(base_url)
-    if token is None:
-        print(f"No valid cached token for {base_url}. Logging in...")
-        token = login(base_url, args.username)
-    else:
-        print(f"Using cached token for {args.username}@{base_url}")
 
-    # Upload
+    # ── Resolve bearer token ─────────────────────────────────────────────────
+    if args.token is not None:
+        bearer = args.token
+        if not bearer.startswith("ctn_"):
+            print(
+                "Warning: token does not start with 'ctn_' — is this an API token? "
+                "For JWT session tokens, use --username instead.",
+                file=sys.stderr,
+            )
+    else:
+        # Username/password flow with JWT cache
+        bearer = load_token(base_url)
+        if bearer is None:
+            print(f"No valid cached token for {base_url}. Logging in...")
+            bearer = login(base_url, args.username)
+        else:
+            print(f"Using cached token for {args.username}@{base_url}")
+
+    # ── Upload ───────────────────────────────────────────────────────────────
     print(f"Uploading {args.zip_path!r} as {bot_name!r}...")
-    bot = upload_bot(base_url, token, args.zip_path, bot_name)
+    bot = upload_bot(base_url, bearer, args.zip_path, bot_name)
 
     bot_id = bot.get("id") or bot.get("uuid") or bot.get("bot_id", "?")
     print(f'Bot registered: "{bot_name}" (id: {bot_id})')
