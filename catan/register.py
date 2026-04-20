@@ -50,6 +50,11 @@ def _load_tokens() -> dict:
         try:
             return json.loads(TOKEN_FILE.read_text())
         except Exception:
+            print(
+                f"Warning: token cache at {TOKEN_FILE} is corrupted and will be ignored. "
+                "Delete it to suppress this warning.",
+                file=sys.stderr,
+            )
             return {}
     return {}
 

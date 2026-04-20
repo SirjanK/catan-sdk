@@ -253,6 +253,31 @@ class GameLogger:
     # Internal
     # ------------------------------------------------------------------
 
+    # ------------------------------------------------------------------
+    # Public accessors
+    # ------------------------------------------------------------------
+
+    @property
+    def game_id(self) -> Optional[str]:
+        """Return the current game ID, or None if no game has started."""
+        return self._game_id
+
+    def close(self) -> None:
+        """Close the underlying log file if it is still open.
+
+        Safe to call multiple times.  The engine calls ``end_game()`` which
+        already closes the file; this method is provided so external callers
+        (e.g. the simulation runner) can clean up without relying on
+        ``end_game()`` having been called.
+        """
+        if self._file is not None:
+            self._file.close()
+            self._file = None
+
+    # ------------------------------------------------------------------
+    # Internal
+    # ------------------------------------------------------------------
+
     def _write(self, record: Dict[str, Any]) -> None:
         if self._file is not None:
             self._file.write(json.dumps(record) + "\n")
