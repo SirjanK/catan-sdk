@@ -1,0 +1,32 @@
+# heuristic_vs_basic.yaml
+# One HeuristicBot against three BasicPlayer bots.
+# Good for benchmarking a new bot against the two available reference bots.
+#
+# Usage:
+#   python -m catan.run catan/examples/heuristic_vs_basic.yaml
+
+seed: 42
+
+players:
+  - type: heuristic
+    seed: 0
+  - type: basic
+    seed: 1
+  - type: basic
+    seed: 2
+  - type: basic
+    seed: 3
+
+limits:
+  max_turns: 500
+  max_invalid_actions: 3
+
+timeouts_ms:
+  setup: 500
+  pre_roll: 500
+  post_roll: 500
+  discard: 500
+  move_robber: 500
+  respond_trade: 200
+
+log_dir: tmp/games

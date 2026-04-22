@@ -19,9 +19,11 @@ from typing import Dict, Type
 
 from catan.player import Player
 from catan.players.basic_player import BasicPlayer
+from submissions.heuristic_bot import HeuristicBot
 
 PLAYER_REGISTRY: Dict[str, Type[Player]] = {
     "basic": BasicPlayer,
+    "heuristic": HeuristicBot,
 }
 
 

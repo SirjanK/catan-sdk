@@ -183,29 +183,48 @@ python -m catan.register \
 ```
 catan-sdk/
   submissions/
-    README.md           ← read this first
-    example_bot.py      ← copy this as your bot template
+    README.md              ← read this first
+    example_bot.py         ← minimal stub — copy and implement all 7 methods
+    heuristic_bot.py       ← advanced reference: strategic heuristic bot (~2.5× BasicPlayer win rate)
   catan/
-    player.py           ← Player ABC — implement this
-    models/             ← Pydantic v2 models (GameState, actions, enums, board)
+    player.py              ← Player ABC — implement this
+    models/                ← Pydantic v2 models (GameState, actions, enums, board)
     engine/
-      engine.py         ← CatanEngine — runs a full game
-      executor.py       ← state mutation functions
-      validator.py      ← action validation + resource cost constants
-      logger.py         ← GameLogger — writes JSONL replay files
-      dev_validator.py  ← 31 fixture tests for bot validation
-    board/              ← board generation and topology
+      engine.py            ← CatanEngine — runs a full game
+      executor.py          ← state mutation functions
+      validator.py         ← action validation + resource cost constants
+      logger.py            ← GameLogger — writes JSONL replay files
+      dev_validator.py     ← 31 fixture tests for bot validation
+    board/                 ← board generation and topology
     players/
-      basic_player.py   ← reference bot implementation
-      registry.py       ← local bot registry for YAML-driven games
-    config.py           ← GameConfig, PlayerConfig (YAML → Pydantic)
-    run.py              ← `python -m catan.run` CLI
-    sim.py              ← `python -m catan.sim` batch simulation CLI
-    submit.py           ← `python -m catan.submit` bot packager
-    register.py         ← `python -m catan.register` tournament registration
-    tests/              ← engine correctness tests
+      basic_player.py      ← simple reference bot (builds city > settlement > road > dev card)
+      heuristic_bot.py     ← advanced reference (see submissions/heuristic_bot.py)
+      helpers.py           ← public utilities: vertex_pip_score, valid_settlement_spots, etc.
+      registry.py          ← local bot registry for YAML-driven games ("basic", "heuristic")
+    config.py              ← GameConfig, PlayerConfig (YAML → Pydantic)
+    run.py                 ← `python -m catan.run` CLI
+    sim.py                 ← `python -m catan.sim` batch simulation CLI
+    submit.py              ← `python -m catan.submit` bot packager
+    register.py            ← `python -m catan.register` tournament registration
+    tests/                 ← engine correctness tests
     examples/
       four_basic_players.yaml
+      heuristic_vs_basic.yaml  ← 1 HeuristicBot vs 3 BasicPlayers
+```
+
+### Helper utilities
+
+`catan.players.helpers` exposes common board-query functions so you don't have to reimplement them:
+
+```python
+from catan.players.helpers import (
+    vertex_pip_score,       # sum of pip weights at a vertex (use for placement scoring)
+    valid_settlement_spots, # vertices where you can build a settlement right now
+    valid_road_edges,       # edges where you can build a road right now
+    best_city_vertex,       # your most productive settlement to upgrade
+    has_resources,          # bool: can the player afford this cost?
+    resource_deficit,       # dict: resources still needed for a cost
+)
 ```
 
 ---
