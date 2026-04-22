@@ -14,3 +14,4 @@ tmp/
 *.db
 *.zip
 .DS_Store
+CLAUDE.md
