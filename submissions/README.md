@@ -109,6 +109,38 @@ These are detected by an AST scan on the server. Everything you need is availabl
 
 ---
 
+## Reference implementations
+
+| File | Description |
+|------|-------------|
+| `submissions/example_bot.py` | Minimal stub — copy this and fill in every method |
+| `catan/players/basic_player.py` | Simple legal bot (build city > settlement > road > dev card) |
+| `submissions/heuristic_bot.py` | **Advanced reference** — strong heuristic bot with placement scoring, strategic trading, dev-card play, and smart robber targeting.  Good starting point for serious bots. |
+
+---
+
+## Helpers (`catan.players.helpers`)
+
+Common board-query utilities you can import instead of reimplementing:
+
+```python
+from catan.players.helpers import (
+    vertex_pip_score,       # sum of pip counts at a vertex
+    vertex_resource_types,  # set of resource types produced at a vertex
+    owned_resource_types,   # resource types a player already produces
+    valid_settlement_spots, # vertices where a player can legally build now
+    valid_road_edges,       # edges where a player can legally build a road
+    best_city_vertex,       # most productive settlement to upgrade
+    has_resources,          # bool: can the player afford a cost dict?
+    resource_deficit,       # dict: resources still needed for a cost
+    PIPS,                   # {number: pip_count} lookup table
+)
+```
+
+Full docstrings: [`catan/players/helpers.py`](../catan/players/helpers.py)
+
+---
+
 ## Tips
 
 - `state` is a **deep copy** — mutate it freely to simulate future moves without affecting the real game.
