@@ -37,6 +37,10 @@ Main turn (goal hierarchy: city > settlement > road > dev card)
   7. Play Monopoly if it closes the deficit (≥ 1 card needed, opponents have cards).
   8. Propose a player-to-player trade (≤ 2 per turn).
   9. Bank / port trade (≤ 2 per turn, best available ratio).
+
+  Roads are built whenever there is a useful target (empty settlement vertex
+  or port within reach).  Dev cards are skipped when partially saving for a
+  city (dev card costs ORE+WHEAT+SHEEP, overlapping with CITY_COST).
  10. Pass.
 
 Respond to trade
@@ -255,6 +259,7 @@ def _is_saving_for_city(state: GameState, player_id: int) -> bool:
         player.resources.get(ResourceType.ORE, 0) >= 1
         or player.resources.get(ResourceType.WHEAT, 0) >= 1
     )
+
 
 
 # ---------------------------------------------------------------------------
@@ -511,11 +516,10 @@ class HeuristicBot(Player):
         if player.settlements_remaining > 0 and valid_settlement_spots(board, pid):
             return "settlement", SETTLEMENT_COST
 
-        # Road: only when it actually leads somewhere AND we're not saving for a city
+        # Road: only when it actually leads somewhere useful
         if (
             player.roads_remaining > 0
             and _best_road_target(board, pid) is not None
-            and not _is_saving_for_city(state, pid)
         ):
             return "road", ROAD_COST
 
