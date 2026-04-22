@@ -10,6 +10,8 @@ A Python game engine and bot development toolkit for Catan. Build, test, and sim
 
 ```bash
 pip install "git+https://github.com/SirjanK/catan-sdk.git"
+# or with uv (faster):
+uv pip install "git+https://github.com/SirjanK/catan-sdk.git"
 ```
 
 **For local development of the SDK itself:**
@@ -17,7 +19,8 @@ pip install "git+https://github.com/SirjanK/catan-sdk.git"
 ```bash
 git clone https://github.com/SirjanK/catan-sdk.git
 cd catan-sdk
-pip install -e ".[dev]"
+uv sync --extra dev   # installs all deps from uv.lock (reproducible)
+# pip fallback: pip install -e ".[dev]"
 ```
 
 ---
