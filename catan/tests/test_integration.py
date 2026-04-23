@@ -10,14 +10,28 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from random import Random
 from typing import List
 
 import pytest
 
-from catan.engine.engine import CatanEngine, GameResult
+from catan.board.setup import create_board
+from catan.engine.engine import CatanEngine, GameResult, _DEV_DECK
 from catan.engine.executor import true_vp
 from catan.engine.logger import GameLogger
-from catan.models.enums import GamePhase
+from catan.models.actions import (
+    DiscardCards,
+    MoveRobber,
+    Pass,
+    PlaceRoad,
+    PlaceSettlement,
+    PlayKnight,
+    RespondToTrade,
+    RollDice,
+)
+from catan.models.enums import DevCardType, GamePhase, ResourceType
+from catan.models.state import GameState, PlayerState
+from catan.player import Player
 from catan.players.basic_player import BasicPlayer
 
 
@@ -410,3 +424,181 @@ class TestLoggerClose:
     def test_game_id_none_before_start(self, tmp_path):
         logger = GameLogger(log_dir=str(tmp_path))
         assert logger.game_id is None
+
+
+# ---------------------------------------------------------------------------
+# Regression: pre-roll knight → Largest Army → 10 VP without post-roll win check
+# ---------------------------------------------------------------------------
+#
+# Bug: a player who plays a knight in PRE_ROLL that tips them to 10 VP (via
+# Largest Army) and then simply Passes in POST_ROLL was not declared the
+# winner.  The Pass branch in _do_post_roll broke out of the loop before the
+# win check, and _run_turn had no fallback check after _do_post_roll returned.
+# The result was that the game continued to the next player's turn.
+# ---------------------------------------------------------------------------
+
+
+class _MinimalPlayer(Player):
+    """No-op player whose actions are configured per-instance."""
+
+    def setup_place_settlement(self, state: GameState) -> PlaceSettlement:
+        return PlaceSettlement(vertex_id=0)  # fallback; unused in direct _run_turn tests
+
+    def setup_place_road(self, state: GameState, settlement_vid: int) -> PlaceRoad:
+        return PlaceRoad(edge_id=0)
+
+    def discard_cards(self, state: GameState, count: int) -> DiscardCards:
+        return DiscardCards(resources={})
+
+    def move_robber(self, state: GameState) -> MoveRobber:
+        return MoveRobber(hex_id=0, steal_from_player_id=None)
+
+    def pre_roll_action(self, state: GameState) -> PlayKnight | RollDice:
+        return RollDice()
+
+    def take_turn(self, state: GameState) -> Pass:
+        return Pass()
+
+    def respond_to_trade(self, state: GameState, proposal) -> RespondToTrade:
+        return RespondToTrade(proposal_id=proposal.proposal_id, accept=False)
+
+
+class _KnightThenPassPlayer(_MinimalPlayer):
+    """Plays one Knight in pre-roll (to claim Largest Army), then Passes."""
+
+    def __init__(self, target_hex_id: int) -> None:
+        self._target_hex_id = target_hex_id
+        self._knight_played = False
+
+    def pre_roll_action(self, state: GameState) -> PlayKnight | RollDice:
+        if not self._knight_played:
+            self._knight_played = True
+            return PlayKnight(
+                target_hex_id=self._target_hex_id,
+                steal_from_player_id=None,
+            )
+        return RollDice()
+
+
+def _make_knight_win_fixtures():
+    """Build an engine + state for the pre-roll knight win regression scenario.
+
+    Player 0 has 8 public VP and has played 2 knights.  No one holds Largest
+    Army yet, so playing a 3rd knight gives the title (+2 VP → 10 VP total).
+    """
+    board = create_board(randomize=False)
+    robber_start = board.robber_hex_id
+    non_robber_hex = next(h for h in board.hexes if h != robber_start)
+
+    p0 = PlayerState(
+        player_id=0,
+        resources={r: 0 for r in ResourceType if r != ResourceType.DESERT},
+        dev_cards=[DevCardType.KNIGHT],
+        dev_cards_count=1,
+        resource_count=0,
+        knights_played=2,
+        roads_remaining=15,
+        settlements_remaining=5,
+        cities_remaining=4,
+        public_vp=8,
+        has_longest_road=False,
+        has_largest_army=False,
+    )
+    others = [
+        PlayerState(
+            player_id=i,
+            resources={r: 0 for r in ResourceType if r != ResourceType.DESERT},
+            dev_cards=[],
+            dev_cards_count=0,
+            resource_count=0,
+            knights_played=0,
+            roads_remaining=15,
+            settlements_remaining=5,
+            cities_remaining=4,
+            public_vp=2,
+            has_longest_road=False,
+            has_largest_army=False,
+        )
+        for i in range(1, 4)
+    ]
+    state = GameState(
+        board=board,
+        players=[p0] + others,
+        current_player_id=0,
+        phase=GamePhase.PRE_ROLL,
+        turn_number=1,
+        dice=None,
+        pending_trades=[],
+        trades_proposed_this_turn=0,
+        dev_cards_remaining=20,
+        longest_road_player=None,
+        largest_army_player=None,
+    )
+
+    engine = CatanEngine(seed=0)
+    engine._rng = Random(0)
+    engine._logger = None
+    engine._executor = None
+    dev_deck = _DEV_DECK.copy()
+    Random(0).shuffle(dev_deck)
+    engine._dev_deck = dev_deck
+
+    players: List[Player] = [_KnightThenPassPlayer(non_robber_hex)] + [
+        _MinimalPlayer() for _ in range(1, 4)
+    ]
+    # Engine assigns player_id in run_game; replicate that for direct _run_turn use.
+    for i, p in enumerate(players):
+        p.player_id = i
+
+    return engine, state, players
+
+
+class TestPreRollKnightWinRegression:
+    """Regression tests for the pre-roll knight → Largest Army win bug."""
+
+    def test_phase_is_game_over_after_winning_knight(self):
+        """Phase must be GAME_OVER immediately after player 0's winning knight play."""
+        engine, state, players = _make_knight_win_fixtures()
+        engine._run_turn(state, players)
+        assert state.phase == GamePhase.GAME_OVER, (
+            f"Expected GAME_OVER; got {state.phase}. "
+            f"Player 0 true VP: {true_vp(state, 0)}"
+        )
+
+    def test_current_player_not_advanced_after_winning_turn(self):
+        """current_player_id must remain 0 (not advance to 1) after the win."""
+        engine, state, players = _make_knight_win_fixtures()
+        engine._run_turn(state, players)
+        assert state.current_player_id == 0, (
+            f"Turn advanced to player {state.current_player_id} after player 0 won"
+        )
+
+    def test_player_0_has_ten_vp_after_knight(self):
+        """Player 0 must have exactly 10 true VP after the knight triggers Largest Army."""
+        engine, state, players = _make_knight_win_fixtures()
+        engine._run_turn(state, players)
+        assert true_vp(state, 0) == 10
+
+    def test_main_loop_stops_after_winning_turn(self):
+        """run_game must declare player 0 the winner without playing a next turn."""
+        # Wire up real run_game by wrapping engine so we can count how many
+        # times _run_turn is called.
+        engine, state, players = _make_knight_win_fixtures()
+        calls: List[int] = []
+        original = engine._run_turn
+
+        def counting_run_turn(s, p):
+            calls.append(s.current_player_id)
+            original(s, p)
+
+        engine._run_turn = counting_run_turn  # type: ignore[method-assign]
+
+        # Manually run the main loop (mirrors engine.run_game's while loop)
+        while state.phase != GamePhase.GAME_OVER and state.turn_number <= 500:
+            engine._run_turn(state, players)
+
+        assert state.phase == GamePhase.GAME_OVER
+        # Only one turn should have run (player 0's), not two (player 0 then player 1)
+        assert len(calls) == 1, (
+            f"Expected 1 turn (player 0 wins), but {len(calls)} turns ran: {calls}"
+        )

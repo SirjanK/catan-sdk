@@ -590,6 +590,13 @@ class CatanEngine:
         if state.phase == GamePhase.GAME_OVER:
             return
 
+        # VP gained during pre-roll (e.g. knight → largest army) is not caught by
+        # the post-roll win check when the player simply passes.  Check here so the
+        # turn ends immediately rather than advancing to the next player.
+        if true_vp(state, pid) >= 10:
+            state.phase = GamePhase.GAME_OVER
+            return
+
         # --- ADVANCE TURN ---
         state.current_player_id = (pid + 1) % len(players)
         state.turn_number += 1
