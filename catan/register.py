@@ -72,10 +72,14 @@ def _save_tokens(tokens: dict) -> None:
         pass
 
 
-def load_token(url: str) -> Optional[str]:
-    """Return a cached, non-expired JWT for *url*, or None."""
+def _cache_key(url: str, username: str) -> str:
+    return f"{url.rstrip('/')}@{username}"
+
+
+def load_token(url: str, username: str) -> Optional[str]:
+    """Return a cached, non-expired JWT for *url* + *username*, or None."""
     tokens = _load_tokens()
-    entry = tokens.get(url.rstrip("/"))
+    entry = tokens.get(_cache_key(url, username))
     if entry is None:
         return None
     expires_at = entry.get("expires_at")
@@ -93,7 +97,7 @@ def load_token(url: str) -> Optional[str]:
 
 def save_token(url: str, token: str, username: str, expires_at: str) -> None:
     tokens = _load_tokens()
-    tokens[url.rstrip("/")] = {
+    tokens[_cache_key(url, username)] = {
         "token": token,
         "username": username,
         "expires_at": expires_at,
@@ -138,7 +142,7 @@ def login(url: str, username: str) -> str:
     if resp.status_code == 401:
         print("Error: Invalid username or password.", file=sys.stderr)
         sys.exit(1)
-    if not resp.ok:
+    if not resp.is_success:
         print(f"Error: Login failed (HTTP {resp.status_code}): {resp.text}", file=sys.stderr)
         sys.exit(1)
 
@@ -171,12 +175,8 @@ def upload_bot(url: str, token: str, zip_path: str, name: str) -> dict:
         resp = httpx.post(
             f"{base}/bots",
             params={"name": name},
-            content=zip_bytes,
-            headers={
-                "Authorization": f"Bearer {token}",
-                "Content-Type": "application/zip",
-                "X-Filename": zip_filename,
-            },
+            files={"file": (zip_filename, zip_bytes, "application/zip")},
+            headers={"Authorization": f"Bearer {token}"},
             timeout=60,
         )
     except httpx.RequestError as e:
@@ -190,7 +190,7 @@ def upload_bot(url: str, token: str, zip_path: str, name: str) -> dict:
             file=sys.stderr,
         )
         sys.exit(1)
-    if not resp.ok:
+    if not resp.is_success:
         try:
             detail = resp.json().get("detail", resp.text)
         except Exception:
@@ -266,7 +266,7 @@ def main(argv=None) -> None:
             )
     else:
         # Username/password flow with JWT cache
-        bearer = load_token(base_url)
+        bearer = load_token(base_url, args.username)
         if bearer is None:
             print(f"No valid cached token for {base_url}. Logging in...")
             bearer = login(base_url, args.username)

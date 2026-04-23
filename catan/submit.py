@@ -57,9 +57,9 @@ def _load_class(spec: str):
 
 def _validate(cls) -> None:
     """Run PlayerValidator; exit with failure details on any check failure."""
-    from catan.engine.player_validator import PlayerValidator
+    from catan.engine.dev_validator import DevValidator as PlayerValidator
 
-    print(f"Running PlayerValidator against {cls.__name__} ...")
+    print(f"Running DevValidator against {cls.__name__} ...")
     validator = PlayerValidator(cls)
     result = validator.run()
     if result.passed:
