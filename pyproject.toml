@@ -13,6 +13,15 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# Packages available to bot submissions at runtime on the tournament server.
+# Bot source files may import from any of these freely.
+# To add a new package, open a PR updating this list AND catan/approved_imports.py.
+bot-extras = [
+    "numpy>=1.24",
+    "scipy>=1.11",
+    "pandas>=2.0",
+    "scikit-learn>=1.3",
+]
 dev = [
     "pytest>=8.0",
     "pytest-timeout",
