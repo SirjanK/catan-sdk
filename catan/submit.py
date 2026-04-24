@@ -55,6 +55,37 @@ def _load_class(spec: str):
     return getattr(module, class_name), module
 
 
+def _check_imports(cls, module) -> None:
+    """Verify every import in the bot's source files is from an approved package."""
+    from catan.approved_imports import APPROVED_THIRD_PARTY, check_bot_imports
+
+    source_file = Path(inspect.getfile(module))
+    is_package = hasattr(module, "__path__")
+    files = list(source_file.parent.rglob("*.py")) if is_package else [source_file]
+
+    sources = []
+    for f in files:
+        try:
+            sources.append((str(f), f.read_text(encoding="utf-8")))
+        except OSError as e:
+            print(f"WARNING: could not read {f}: {e}")
+
+    print(f"Checking imports in {len(sources)} file(s) ...")
+    ok, violations = check_bot_imports(sources)
+    if ok:
+        print(f"  Import check passed.")
+    else:
+        print("\nIMPORT CHECK FAILED — unapproved dependencies detected:")
+        for v in violations:
+            print(f"  {v}")
+        approved = ", ".join(sorted(APPROVED_THIRD_PARTY))
+        print(f"\nApproved third-party packages: {approved}")
+        print("To request a new package, open a PR to catan-sdk and add it to:")
+        print("  pyproject.toml  [project.optional-dependencies.bot-extras]")
+        print("  catan/approved_imports.py  APPROVED_THIRD_PARTY")
+        sys.exit(1)
+
+
 def _validate(cls) -> None:
     """Run PlayerValidator; exit with failure details on any check failure."""
     from catan.engine.dev_validator import DevValidator as PlayerValidator
@@ -112,6 +143,7 @@ def main() -> None:
 
     spec = sys.argv[1]
     cls, module = _load_class(spec)
+    _check_imports(cls, module)
     _validate(cls)
 
     out_dir = Path(".")
