@@ -4,14 +4,32 @@ build-backend = "hatchling.build"
 
 [project]
 name = "catan-sdk"
-version = "0.1.0"
+version = "0.1.1"
 description = "Catan game engine and bot development toolkit"
+readme = { file = "README.md", content-type = "text/markdown" }
 requires-python = ">=3.11"
+keywords = ["catan", "board-game", "simulation", "bot", "sdk"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Games/Entertainment :: Board Games",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
 dependencies = [
     "httpx>=0.28.1",
     "pydantic>=2.0",
     "pyyaml>=6.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/SirjanK/catan-sdk"
+Repository = "https://github.com/SirjanK/catan-sdk"
+Issues = "https://github.com/SirjanK/catan-sdk/issues"
 
 [project.optional-dependencies]
 # Packages available to bot submissions at runtime on the tournament server.

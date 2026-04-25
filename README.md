@@ -6,12 +6,12 @@ A Python game engine and bot development toolkit for Catan. Build a bot locally,
 
 ## Installation
 
-**Bot developers** — install from GitHub:
+**Bot developers** — install from PyPI:
 
 ```bash
-pip install "git+https://github.com/SirjanK/catan-sdk.git"
-# or with uv (faster):
-uv pip install "git+https://github.com/SirjanK/catan-sdk.git"
+pip install catan-sdk
+# or with uv:
+uv pip install catan-sdk
 ```
 
 **SDK contributors** — clone and install in editable mode:
