@@ -46,12 +46,17 @@ def compute_longest_road(board: Board, player_id: int) -> int:
             visited_edges.discard(eid)
         return best
 
-    # Collect all vertices that touch at least one player road
+    # Collect vertices that touch at least one player road, excluding vertices
+    # occupied by opponents — a path cannot START at an opponent's building
+    # (it can arrive there, but that terminates the path, so starting there
+    # would double-count roads on the other side of the blockage).
     start_vertices: set[int] = set()
     for edge in board.edges.values():
         if edge.road_owner == player_id:
-            start_vertices.add(edge.vertex_ids[0])
-            start_vertices.add(edge.vertex_ids[1])
+            for vid in edge.vertex_ids:
+                bldg = board.vertices[vid].building
+                if bldg is None or bldg.player_id == player_id:
+                    start_vertices.add(vid)
 
     max_length = 0
     for v in start_vertices:

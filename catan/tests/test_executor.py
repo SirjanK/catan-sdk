@@ -456,6 +456,49 @@ class TestUpdateLongestRoad:
                     break
         return current_vid
 
+    def _build_linear_chain(
+        self, state: GameState, pid: int, start_vid: int, n_roads: int
+    ) -> list[int]:
+        """Find and build a cycle-free path of exactly n_roads from start_vid.
+
+        Uses DFS with backtracking on the board topology to find a valid path,
+        then places roads along it. Returns the list of n_roads+1 vertex ids.
+        Raises AssertionError if no such path exists.
+        """
+        board = state.board
+
+        def find_path(vid: int, remaining: int, visited: set[int]) -> list[int] | None:
+            if remaining == 0:
+                return [vid]
+            for eid in board.vertices[vid].adjacent_edge_ids:
+                va, vb = board.edges[eid].vertex_ids
+                nxt = vb if va == vid else va
+                if nxt in visited:
+                    continue
+                visited.add(nxt)
+                result = find_path(nxt, remaining - 1, visited)
+                if result is not None:
+                    return [vid] + result
+                visited.discard(nxt)
+            return None
+
+        path = find_path(start_vid, n_roads, {start_vid})
+        assert path is not None, f"No {n_roads}-road path from vertex {start_vid}"
+
+        state.board.vertices[start_vid].building = Building(
+            player_id=pid, building_type=BuildingType.SETTLEMENT
+        )
+        for i in range(len(path) - 1):
+            va, vb = path[i], path[i + 1]
+            for eid in board.vertices[va].adjacent_edge_ids:
+                edge = board.edges[eid]
+                if set(edge.vertex_ids) == {va, vb}:
+                    edge.road_owner = pid
+                    state.players[pid].roads_remaining -= 1
+                    break
+
+        return path
+
     def test_no_award_below_5(self):
         state = _make_state()
         self._build_chain(state, 0, 0, 4)
@@ -482,6 +525,89 @@ class TestUpdateLongestRoad:
         assert state.players[0].has_longest_road is False
         assert state.players[0].public_vp == 0
         assert state.players[1].public_vp == 2
+
+    def test_opponent_settlement_blocks_road_passage(self):
+        """Opponent building at an interior vertex reduces the measured road length."""
+        state = _make_state()
+        # P0 builds a 7-road linear chain; chain has 8 vertices (index 0..7).
+        chain = self._build_linear_chain(state, 0, 0, 7)
+        assert len(chain) == 8, f"Expected 8 vertices, got {len(chain)}: {chain}"
+        update_longest_road(state)
+        assert state.longest_road_player == 0
+        assert state.players[0].public_vp == 2
+
+        # P1 places a settlement at chain[3] (middle of 8 vertices).
+        # This splits P0's chain into a 3-road segment (0..3) and a 4-road segment (3..7).
+        mid_vid = chain[3]
+        state.board.vertices[mid_vid].building = Building(
+            player_id=1, building_type=BuildingType.SETTLEMENT
+        )
+        from catan.engine.longest_road import compute_longest_road
+        road_len = compute_longest_road(state.board, 0)
+        # The longer surviving segment is 4 roads (chain[3] → chain[7]).
+        assert road_len == 4
+
+    def test_opponent_settlement_causes_marker_loss(self):
+        """Holder drops below 5 when an opponent settlement breaks their chain."""
+        state = _make_state()
+        chain = self._build_linear_chain(state, 0, 0, 7)
+        assert len(chain) == 8
+        update_longest_road(state)
+        assert state.longest_road_player == 0
+
+        # P1 settlement at chain[3] splits P0 into segments of 3 and 4 — both < 5.
+        mid_vid = chain[3]
+        state.board.vertices[mid_vid].building = Building(
+            player_id=1, building_type=BuildingType.SETTLEMENT
+        )
+        state.players[1].settlements_remaining -= 1
+        state.players[1].public_vp += 1
+        update_longest_road(state)
+
+        # P0's longest road is now 4, which is below the 5-road threshold.
+        assert state.longest_road_player is None
+        assert state.players[0].has_longest_road is False
+        assert state.players[0].public_vp == 0  # lost the 2-VP bonus
+
+    def test_opponent_settlement_breaks_road_and_third_player_steals_marker(self):
+        """
+        Full scenario: P0 holds Longest Road (7 roads).  P2 has a 5-road chain
+        (not enough to steal yet).  P1 then places a settlement at the midpoint
+        of P0's chain, splitting it into segments of length 3 and 4.  P0 drops
+        below 5, loses the marker, and P2 (still at 5) immediately claims it.
+        """
+        state = _make_state()
+
+        # P0: 7-road linear chain; track every vertex.
+        chain_p0 = self._build_linear_chain(state, 0, 0, 7)
+        assert len(chain_p0) == 8
+        update_longest_road(state)
+        assert state.longest_road_player == 0
+        assert state.players[0].public_vp == 2
+
+        # P2: independent 5-road chain; not long enough to steal from P0 yet.
+        self._build_chain(state, 2, 30, 5)
+        update_longest_road(state)
+        assert state.longest_road_player == 0  # P0 still holds it (7 > 5)
+        assert state.players[2].has_longest_road is False
+
+        # P1 places a settlement at the midpoint of P0's chain.
+        # Splits P0 into 3-road and 4-road segments; max = 4 < 5.
+        # This is the same call execute_build_settlement makes internally.
+        mid_vid = chain_p0[3]
+        state.board.vertices[mid_vid].building = Building(
+            player_id=1, building_type=BuildingType.SETTLEMENT
+        )
+        state.players[1].settlements_remaining -= 1
+        state.players[1].public_vp += 1
+        update_longest_road(state)
+
+        # P0 lost the marker; P2 (5 roads > vacated threshold of 4) claims it.
+        assert state.longest_road_player == 2
+        assert state.players[2].has_longest_road is True
+        assert state.players[2].public_vp == 2
+        assert state.players[0].has_longest_road is False
+        assert state.players[0].public_vp == 0  # 2 from bonus - 2 when lost = 0
 
 
 # ---------------------------------------------------------------------------
