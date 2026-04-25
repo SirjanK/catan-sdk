@@ -416,6 +416,7 @@ class CatanEngine:
             valid, reason = validate_fn(action)
             if valid:
                 execute_fn(action)
+                state.turn_actions.append(_action_type(action))
                 if self._logger:
                     self._logger.log_action(
                         state.turn_number, pid, phase_name,
@@ -566,6 +567,7 @@ class CatanEngine:
     def _run_turn(self, state: GameState, players: List[Player]) -> None:
         pid = state.current_player_id
         player = players[pid]
+        state.turn_actions = []   # reset at the start of each turn
 
         if self._logger:
             self._logger.log_turn_state(state)
@@ -603,6 +605,7 @@ class CatanEngine:
         state.dice = None
         state.pending_trades = []
         state.trades_proposed_this_turn = 0
+        state.turn_actions = []
         state.phase = GamePhase.PRE_ROLL
 
     # ------------------------------------------------------------------
@@ -650,6 +653,7 @@ class CatanEngine:
                 continue
 
             invalid_count = 0
+            state.turn_actions.append(_action_type(action))
             if self._logger:
                 self._logger.log_action(
                     state.turn_number, pid, "PRE_ROLL",
@@ -787,6 +791,7 @@ class CatanEngine:
                 continue
 
             invalid_count = 0
+            state.turn_actions.append(_action_type(action))
             if self._logger:
                 self._logger.log_action(
                     state.turn_number, pid, "POST_ROLL",

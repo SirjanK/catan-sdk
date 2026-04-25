@@ -100,6 +100,12 @@ class GameState(BaseModel):
         dev_cards_remaining: Cards left in the shared deck (always public).
         longest_road_player: player_id holding the Longest Road bonus, or None.
         largest_army_player: player_id holding the Largest Army bonus, or None.
+        turn_actions: Ordered list of action-type strings executed so far this
+            turn (e.g. ``["play_knight", "roll_dice", "build.settlement"]``).
+            Reset to [] at the start of each new turn.  Bots can inspect this
+            to avoid repeating actions (e.g. check ``"bank_trade" in
+            state.turn_actions``) instead of maintaining their own per-turn
+            flags.
     """
 
     board: Board
@@ -113,3 +119,4 @@ class GameState(BaseModel):
     dev_cards_remaining: int
     longest_road_player: Optional[int] = None
     largest_army_player: Optional[int] = None
+    turn_actions: List[str] = []
