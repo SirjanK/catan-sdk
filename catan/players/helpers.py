@@ -86,6 +86,14 @@ def valid_settlement_spots(board: Board, player_id: int) -> List[int]:
 
     A valid spot is: empty, passes the distance rule, and is adjacent to at
     least one of the player's roads.
+
+    Performance note: this function scans the full board on every call
+    (O(|vertices|)).  If you call it multiple times in a single ``take_turn``
+    invocation, cache the result in a local variable::
+
+        spots = valid_settlement_spots(state.board, self.player_id)
+        if spots:
+            best = max(spots, key=lambda v: vertex_pip_score(state.board, v))
     """
     return [
         vid
@@ -97,7 +105,11 @@ def valid_settlement_spots(board: Board, player_id: int) -> List[int]:
 
 
 def valid_road_edges(board: Board, player_id: int) -> List[int]:
-    """Return edge IDs where *player_id* can legally place a road now."""
+    """Return edge IDs where *player_id* can legally place a road now.
+
+    Performance note: scans the full board on every call (O(|edges|)).
+    Cache the result locally if calling multiple times in one turn.
+    """
     return [
         eid
         for eid, e in board.edges.items()

@@ -88,6 +88,32 @@ class SimulationResult:
     board_seed: Optional[int]
     run_id: str
 
+    def _merged_stats(self) -> List[BotStats]:
+        """Return bot_stats with duplicate-name rows merged into one."""
+        merged: dict[str, BotStats] = {}
+        for s in self.bot_stats:
+            if s.name not in merged:
+                merged[s.name] = BotStats(
+                    name=s.name,
+                    games_played=s.games_played,
+                    wins=s.wins,
+                    total_vp=s.total_vp,
+                    placement_counts=dict(s.placement_counts),
+                )
+            else:
+                m = merged[s.name]
+                m.games_played += s.games_played
+                m.wins += s.wins
+                m.total_vp += s.total_vp
+                for place, count in s.placement_counts.items():
+                    m.placement_counts[place] = m.placement_counts.get(place, 0) + count
+        # Preserve insertion order (first occurrence)
+        seen: list[str] = []
+        for s in self.bot_stats:
+            if s.name not in seen:
+                seen.append(s.name)
+        return [merged[n] for n in seen]
+
     def summary(self) -> str:
         board_info = (
             f"fixed board seed={self.board_seed}"
@@ -100,7 +126,7 @@ class SimulationResult:
             f"{'Avg Place':>9}  {'1st':>5}{'2nd':>5}{'3rd':>5}{'4th':>5}",
             "-" * 78,
         ]
-        for s in self.bot_stats:
+        for s in self._merged_stats():
             pc = s.placement_counts
             pcts = " ".join(
                 f"{(pc.get(i, 0) / s.games_played * 100):.0f}%".rjust(5)
@@ -136,7 +162,7 @@ class SimulationResult:
                     "avg_placement": s.avg_placement,
                     "placement_counts": {str(k): v for k, v in s.placement_counts.items()},
                 }
-                for s in self.bot_stats
+                for s in self._merged_stats()
             ],
             "log_dir": self.log_dir,
         }
