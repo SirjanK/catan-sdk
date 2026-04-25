@@ -15,6 +15,7 @@ tmp/
 *.zip
 .DS_Store
 CLAUDE.md
+submissions/*
 !submissions/example_bot.py
 !submissions/heuristic_bot.py
 !submissions/README.md
