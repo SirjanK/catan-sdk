@@ -31,4 +31,4 @@ dev = [
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["catan"]
+packages = ["catan", "catan_sdk_support"]
