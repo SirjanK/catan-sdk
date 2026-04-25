@@ -94,7 +94,10 @@ def _validate(cls) -> None:
     validator = PlayerValidator(cls)
     result = validator.run()
     if result.passed:
-        print(f"  All {len(result.passes)} checks passed.")
+        print(
+            f"  All {len(result.passes)} validator checks passed."
+            "  (pytest test_dev_validator.py runs 2 additional harness tests.)"
+        )
     else:
         print(result.summary())
         sys.exit(1)
@@ -149,7 +152,9 @@ def main() -> None:
     out_dir = Path(".")
     zip_path = _create_zip(cls, module, out_dir)
     print(f"\nPackaged: {zip_path.resolve()}")
-    print("Upload this file at the webapp → Bots → Add Bot.")
+    print("Upload options:")
+    print(f"  CLI (recommended): python -m catan.register --token ctn_<token> --zip {zip_path.name}")
+    print(f"  Web UI: drag-and-drop at <tournament-site>/bots → Add Bot")
 
 
 if __name__ == "__main__":

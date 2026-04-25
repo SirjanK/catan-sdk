@@ -184,7 +184,17 @@ def _httpx():
 def login(url: str, username: str) -> str:
     """Prompt for password, POST /auth/login, cache and return the JWT."""
     httpx = _httpx()
-    password = getpass.getpass(f"Password for {username}@{url.rstrip('/')}: ")
+    try:
+        password = getpass.getpass(f"Password for {username}@{url.rstrip('/')}: ")
+    except (EOFError, OSError):
+        print(
+            "Error: Cannot read password interactively (no TTY detected).\n"
+            "  Option 1 — pipe via stdin:  echo 'yourpassword' | python -m catan.register ...\n"
+            "  Option 2 — use an API token: python -m catan.register --token ctn_<token> ...\n"
+            "  Generate a token at the tournament site: /tokens",
+            file=sys.stderr,
+        )
+        sys.exit(1)
     base = url.rstrip("/")
     try:
         resp = httpx.post(
@@ -280,9 +290,10 @@ def main(argv=None) -> None:
     parser.add_argument(
         "--name", default=None,
         help=(
-            "Display name for the bot.  Defaults to the class name stored in "
-            "the zip's manifest.json (e.g. 'PlannerBot'), falling back to the "
-            "zip filename stem.  Pass --name to override."
+            "Display name for the bot.  Alphanumeric and spaces only; max 20 "
+            "characters (server-enforced).  Defaults to the class name stored "
+            "in the zip's manifest.json (e.g. 'PlannerBot'), falling back to "
+            "the zip filename stem.  Pass --name to override."
         ),
     )
     parser.add_argument(

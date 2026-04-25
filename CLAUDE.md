@@ -97,7 +97,7 @@ catan-sdk/
 - Python 3.11+, Pydantic v2.
 - Hex coords: pointy-top axial. Corner 0 = N, clockwise: N, NE, SE, S, SW, NW.
 - Game replays are JSONL: records `game_start`, `board_layout`, `action`, `turn_state`, `dice_roll`, `game_end`.
-- `submissions/` is unignored for `example_bot.py`, `heuristic_bot.py`, `planner_bot.py`, and `README.md`.
+- `submissions/` is unignored for `example_bot.py`, `heuristic_bot.py`, `planner_bot.py`, `dev_card_bot.py`, and `README.md`.
 - `uv.lock` is committed for reproducible installs; run `uv lock` after changing `pyproject.toml`.
 
 ## Bot Development Workflow (for agents)
@@ -112,9 +112,13 @@ The full loop an agent should follow when writing and submitting a new bot:
    ```
    All 33 must pass before uploading.
 
-3. **Run a game** to spot obvious bugs:
+3. **Run a game** to spot obvious bugs.  You can use the registry shortnames OR the full `module:ClassName` format — no registry edit required:
    ```bash
+   # Using registry shortnames (built-in bots only)
    python -m catan.run catan/examples/four_basic_players.yaml
+   # Using module:class in a custom YAML (your bot + basic opponents)
+   # players: [{type: "submissions.my_bot:MyBot", seed: 0}, {type: basic, seed: 1}, ...]
+   python -m catan.run /path/to/my_game.yaml
    ```
 
 4. **Simulate** win rates (200 games, 4 workers is a good default):
@@ -157,13 +161,17 @@ The full loop an agent should follow when writing and submitting a new bot:
 | BasicPlayer | ~17% |
 | PlannerBot | ~33% |
 | HeuristicBot | ~37–41% |
+| DevCardBot | ~43% vs Basic / ~34% vs Heuristic |
 
 A new bot should aim to beat BasicPlayer before considering it tournament-ready.
 
 ## Common Pitfalls
 
 - **`httpx` is a main dependency** — it ships with the SDK. If you see an ImportError, run `uv sync` to realign the environment.
-- **`--name` defaults to the class name** from the zip's `manifest.json` — you only need `--name` to override the display name.
+- **`--name` defaults to the class name** from the zip's `manifest.json` — you only need `--name` to override the display name.  Name must be alphanumeric + spaces, max 20 characters (server-enforced); parentheses and other punctuation are rejected.
+- **`--username` flow in non-tty environments**: `getpass` fails when stdin is not a terminal (e.g. inside an agent subprocess).  Pipe the password: `echo 'pw' | python -m catan.register --username ...` — or use `--token` which always works.
+- **`catan.submit` says "31 checks"**; `pytest test_dev_validator.py` says "33 tests".  Both are correct: 31 are DevValidator internal checks, and pytest wraps those plus adds 2 harness tests.  All 33 must pass before upload.
+- **`catan.run` YAML accepts `module:ClassName`** as a player type (e.g. `type: submissions.my_bot:MyBot`) — no need to register the bot in `registry.py` first.
 - **`uv run` prefix**: Always use `uv run python -m ...` or `uv run pytest` if not inside the activated venv. The `VIRTUAL_ENV=venv does not match .venv` warning is benign.
 - **`take_turn` is called in a loop**: Return `Pass()` to end the turn. Each call is one action. Use `state.turn_actions` to see what you've already done this turn (e.g., check `"bank_trade" in state.turn_actions`), or maintain per-turn flags reset in `pre_roll_action`.
 - **Sim output**: each bot appears twice when fewer than 4 bots are given (seats filled with duplicates). Stats are now automatically aggregated by bot name.
