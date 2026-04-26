@@ -6,17 +6,15 @@ Two authentication modes:
   API token (recommended for CI/automation)::
 
     python -m catan.register \\
-      --url https://tournament.example.com \\
       --token ctn_abc123...  \\
       --zip MyBot.zip
 
-    Generate a token at the tournament site: /tokens.
+    Generate a token at the tournament site: https://catan.bot/settings
     Tokens do not expire and can be revoked at any time.
 
   Username/password (interactive sessions)::
 
     python -m catan.register \\
-      --url https://tournament.example.com \\
       --username player1 \\
       --zip MyBot.zip
 
@@ -36,7 +34,7 @@ Display name::
 
 Dry run (validate without uploading)::
 
-    python -m catan.register --url ... --token ... --zip MyBot.zip --dry-run
+    python -m catan.register --token ... --zip MyBot.zip --dry-run
 """
 
 from __future__ import annotations
@@ -53,6 +51,7 @@ from typing import Optional
 
 TOKEN_DIR = Path.home() / ".catan"
 TOKEN_FILE = TOKEN_DIR / "tokens.json"
+DEFAULT_SERVER_URL = os.environ.get("CATAN_SERVER_URL", "https://catan.bot")
 
 # ---------------------------------------------------------------------------
 # JWT session-token cache  (username/password flow only)
@@ -191,7 +190,7 @@ def login(url: str, username: str) -> str:
             "Error: Cannot read password interactively (no TTY detected).\n"
             "  Option 1 — pipe via stdin:  echo 'yourpassword' | python -m catan.register ...\n"
             "  Option 2 — use an API token: python -m catan.register --token ctn_<token> ...\n"
-            "  Generate a token at the tournament site: /tokens",
+            "  Generate a token at the tournament site: https://catan.bot/settings",
             file=sys.stderr,
         )
         sys.exit(1)
@@ -280,8 +279,12 @@ def main(argv=None) -> None:
         epilog=__doc__,
     )
     parser.add_argument(
-        "--url", required=True,
-        help="Base URL of the tournament server (e.g. http://localhost:8000).",
+        "--url",
+        default=DEFAULT_SERVER_URL,
+        help=(
+            "Base URL of the tournament server "
+            f"(default: {DEFAULT_SERVER_URL}; override with CATAN_SERVER_URL)."
+        ),
     )
     parser.add_argument(
         "--zip", required=True, dest="zip_path",
@@ -311,7 +314,7 @@ def main(argv=None) -> None:
         default=None,
         help=(
             "Long-lived API token (starts with 'ctn_'). "
-            "Generate one at the tournament site under /tokens. "
+            "Generate one at https://catan.bot/settings. "
             "Preferred for CI/automation — no password prompt."
         ),
     )

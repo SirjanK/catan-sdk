@@ -20,7 +20,7 @@ pytest catan/tests/test_dev_validator.py --player=submissions.my_bot:MyBot -v
 
 # 4. Play a game and watch the replay
 python -m catan.run catan/examples/four_basic_players.yaml
-# → drag-drop the .jsonl from tmp/games/ onto <tournament-site>/viewer
+# → drag-drop the .jsonl from tmp/games/ onto https://catan.bot/viewer
 
 # 5. Simulate win rates vs BasicPlayer
 python -m catan.sim \
@@ -39,14 +39,12 @@ python -m catan.submit submissions.my_bot:MyBot   # → MyBot.zip
 
 # 8. Register (API token — preferred for automation)
 python -m catan.register \
-  --url http://localhost:8000 \
   --token ctn_<your_token> \
   --zip MyBot.zip \
   --name "My Bot v1"
 
 # 8b. Register (username/password — prompts once, caches JWT for 24h)
 python -m catan.register \
-  --url http://localhost:8000 \
   --username your_username \
   --zip MyBot.zip \
   --name "My Bot v1"
@@ -59,12 +57,13 @@ python -m catan.register \
 When an agent (e.g., Claude Code) is running this workflow end-to-end, keep the following in mind:
 
 - **`httpx` must be installed** before `catan.register` will work.  Add it with `uv add httpx` if the install errors out.
-- **Token-based auth is reliable for CI/agents** — use `--token ctn_...` to avoid interactive password prompts.  Generate tokens at `<tournament-site>/settings` → API Tokens.
+- **Token-based auth is reliable for CI/agents** — use `--token ctn_...` to avoid interactive password prompts.  Generate tokens at `https://catan.bot/settings` → API Tokens.
+- **Default server**: `catan.register` uploads to `https://catan.bot` unless you pass `--url` or set `CATAN_SERVER_URL`.
 - **Two uploads under different names** use the same zip:
 
   ```bash
-  python -m catan.register --url http://localhost:8000 --token ctn_... --zip MyBot.zip --name "MyBot A"
-  python -m catan.register --url http://localhost:8000 --token ctn_... --zip MyBot.zip --name "MyBot B"
+  python -m catan.register --token ctn_... --zip MyBot.zip --name "MyBot A"
+  python -m catan.register --token ctn_... --zip MyBot.zip --name "MyBot B"
   ```
 
 - **Manual upload**: `python -m catan.submit` writes `<ClassName>.zip` in the current working directory.  Hand that file to the user to drag into the web UI.
@@ -134,7 +133,7 @@ The server re-runs the same checks plus an AST security scan on upload.
 | `--log-dir PATH` | `tmp/sim/` | Output directory when `--save-logs` is on |
 | `--quiet` | off | Suppress progress bar |
 
-With `--save-logs`, drag the output directory onto the **Batch Results** tab on the tournament site's `/viewer` page to browse all games.
+With `--save-logs`, drag the output directory onto the **Batch Results** tab on `https://catan.bot/viewer` to browse all games.
 
 ### Interpreting results
 
@@ -153,20 +152,18 @@ The sim outputs two rows per bot because it fills empty seats with duplicates.  
 ```bash
 # API token (recommended — no prompts, works in CI/agents)
 python -m catan.register \
-  --url https://<tournament-site> \
   --token ctn_<your_token> \
   --zip MyBot.zip \
   --name "My Bot v2"
 
 # Username/password (interactive, JWT cached 24 h in ~/.catan/tokens.json)
 python -m catan.register \
-  --url https://<tournament-site> \
   --username your_username \
   --zip MyBot.zip \
   --name "My Bot v2"
 ```
 
-Tokens are generated at `<tournament-site>/settings` → API Tokens.  They do not expire and can be revoked.  The JWT cache lives at `~/.catan/tokens.json`.
+Tokens are generated at `https://catan.bot/settings` → API Tokens.  They do not expire and can be revoked.  `catan.register` defaults to `https://catan.bot`; override it with `--url` or `CATAN_SERVER_URL` when targeting another server. The JWT cache lives at `~/.catan/tokens.json`.
 
 ---
 

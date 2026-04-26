@@ -109,7 +109,7 @@ players:
 
 ### 4. Watch the replay
 
-Drag the `.jsonl` file into the hosted viewer at `https://<tournament-site>/viewer`.
+Drag the `.jsonl` file into the hosted viewer at `https://catan.bot/viewer`.
 
 - **Arrow keys** ← → step through actions frame by frame
 - **End** key jumps to the final game state
@@ -135,7 +135,7 @@ MyBot                       200     82  41.0%     7.6       1.8      41%   28%  
 BasicPlayer                 200     38  19.0%     6.0       2.6      19%   24%   27%   30%
 
 Logs saved to: tmp/sim/run_20260419_120000/
-  View results: upload tmp/sim/run_20260419_120000/index.json to the tournament site's Viewer → Batch Results tab
+  View results: upload tmp/sim/run_20260419_120000/index.json to https://catan.bot/viewer → Batch Results
 ```
 
 **Key flags:**
@@ -153,7 +153,7 @@ Logs saved to: tmp/sim/run_20260419_120000/
 
 ### 6. Browse simulation results on the hosted viewer
 
-Upload the `tmp/sim/<run>/` folder (or just `index.json`) to the **Batch Results** tab at `https://<tournament-site>/viewer`:
+Upload the `tmp/sim/<run>/` folder (or just `index.json`) to the **Batch Results** tab at `https://catan.bot/viewer`:
 
 - Sortable/filterable table of all games with winner, VP, and turn count
 - Click any game to step through it frame by frame inline
@@ -168,13 +168,12 @@ python -m catan.submit submissions.my_bot:MyBot    # → MyBot.zip
 
 # Upload to the tournament server
 python -m catan.register \
-  --url https://<tournament-site> \
   --username player1 \
   --zip MyBot.zip \
   --name "My Bot v2"      # optional; defaults to zip filename stem
 ```
 
-`catan.register` caches your JWT at `~/.catan/tokens.json` so you only need to enter your password once per day.
+`catan.register` defaults to `https://catan.bot`, caches your JWT at `~/.catan/tokens.json`, and only needs your password once per day. Override the server with `--url` or `CATAN_SERVER_URL` when testing locally.
 
 ---
 
