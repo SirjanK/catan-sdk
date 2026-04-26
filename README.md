@@ -1,26 +1,108 @@
 # catan-sdk
 
-A Python game engine and bot development toolkit for Catan. Build a bot locally, test it against the engine, simulate thousands of games, watch replays on the hosted site, and register for the tournament — all from the command line.
+Public Python SDK for building, testing, simulating, packaging, and registering Catan bots. This is the repo bot authors should start in.
+
+The hosted tournament site is [catan.bot](https://catan.bot).
+
+---
+
+## Quick Start
+
+If you want to build a bot from scratch, this is the shortest sensible path:
+
+1. Clone the repo and install dependencies
+2. Copy the example bot and describe the strategy you want
+3. Use an agent like Codex or Claude to help implement and iterate
+4. Run the validator harness until it is clean
+5. Simulate against `BasicPlayer` and `HeuristicBot`
+6. Package and register the bot
+7. Browse [catan.bot](https://catan.bot) for open tournaments, uploaded bots, and replays
+
+### Clone and install
+
+```bash
+git clone https://github.com/SirjanK/catan-sdk.git
+cd catan-sdk
+uv sync --extra dev
+```
+
+### Start a bot
+
+```bash
+cp submissions/example_bot.py submissions/my_bot.py
+```
+
+Good prompt for an agent:
+
+> Help me build a Catan bot in `submissions/my_bot.py`. Keep it legal under the validator, start from `BasicPlayer`-level competence, and improve placement, bank trades, and robber targeting step by step.
+
+Best references while iterating:
+
+- `submissions/example_bot.py` — minimal starting stub
+- `catan/players/basic_player.py` — simplest complete legal bot
+- `submissions/heuristic_bot.py` — stronger strategic baseline
+- `submissions/planner_bot.py` — cleaner goal-oriented strategy example
+
+### Validate locally
+
+```bash
+uv run pytest catan/tests/test_dev_validator.py --player=submissions.my_bot:MyBot -v
+```
+
+That pytest file runs **33 tests**, backed by **31 internal `DevValidator` checks**. All of them should pass before you upload.
+
+### Simulate
+
+```bash
+uv run python -m catan.sim \
+  --bot submissions.my_bot:MyBot \
+  --bot basic:BasicPlayer \
+  --games 200 \
+  --workers 4
+
+uv run python -m catan.sim \
+  --bot submissions.my_bot:MyBot \
+  --bot submissions.heuristic_bot:HeuristicBot \
+  --games 200 \
+  --workers 4
+```
+
+### Package and register
+
+```bash
+uv run python -m catan.submit submissions.my_bot:MyBot
+
+uv run python -m catan.register \
+  --username your_username \
+  --zip MyBot.zip
+```
+
+`catan.register` defaults to `https://catan.bot`. Override it with `--url` or `CATAN_SERVER_URL` when targeting a local or private deployment.
+
+After uploading, sign in at [catan.bot](https://catan.bot), browse tournaments, and join any open bracket you are eligible for.
 
 ---
 
 ## Installation
 
-**Bot developers** — install from PyPI:
+### Bot developers
+
+Install from PyPI:
 
 ```bash
 pip install catan-sdk
-# or with uv:
+# or
 uv pip install catan-sdk
 ```
 
-**SDK contributors** — clone and install in editable mode:
+### SDK contributors
+
+Use an editable checkout:
 
 ```bash
 git clone https://github.com/SirjanK/catan-sdk.git
 cd catan-sdk
-uv sync --extra dev   # installs all deps from uv.lock (reproducible)
-# pip fallback: pip install -e ".[dev]"
+uv sync --extra dev
 ```
 
 ---
@@ -29,71 +111,62 @@ uv sync --extra dev   # installs all deps from uv.lock (reproducible)
 
 ### 1. Implement the Player interface
 
-Copy the example template and implement all seven methods:
-
 ```bash
 cp submissions/example_bot.py submissions/my_bot.py
 ```
 
 ```python
-# submissions/my_bot.py
 from catan.player import Player
 from catan.models.state import GameState
-from catan.models.actions import PlaceSettlement, PlaceRoad, RollDice, Pass
+from catan.models.actions import PlaceSettlement, PlaceRoad
+
 
 class MyBot(Player):
     def __init__(self, player_id: int, seed: int = 0):
         self.player_id = player_id
 
     def setup_place_settlement(self, state: GameState) -> PlaceSettlement: ...
-    def setup_place_road(self, state, settlement_vid: int) -> PlaceRoad: ...
-    def pre_roll_action(self, state: GameState): ...       # RollDice or PlayKnight
-    def discard_cards(self, state, required: int): ...     # DiscardCards
-    def move_robber(self, state: GameState): ...           # MoveRobber
-    def take_turn(self, state: GameState): ...             # build / trade / Pass / …
-    def respond_to_trade(self, state, offer): ...         # AcceptTrade or RejectTrade
+    def setup_place_road(self, state: GameState, settlement_vertex_id: int) -> PlaceRoad: ...
+    def pre_roll_action(self, state: GameState): ...
+    def discard_cards(self, state: GameState, count: int): ...
+    def move_robber(self, state: GameState): ...
+    def take_turn(self, state: GameState): ...
+    def respond_to_trade(self, state: GameState, proposal): ...
 ```
 
-The `GameState` you receive is a **deep copy** — mutate it freely. Opponent resource hands and dev cards are hidden (zeroed out); all board state, VP counts, piece counts, and `resource_count` / `dev_cards_count` are public.
-
-See `catan/players/basic_player.py` for a complete reference implementation.
+The `GameState` passed to your bot is a deep copy. Opponent hands are hidden, but board state, piece counts, public VP, `resource_count`, and `dev_cards_count` are visible.
 
 ### The 7 Player methods
 
 | Method | Phase | Return type |
 |--------|-------|-------------|
 | `setup_place_settlement(state)` | Setup | `PlaceSettlement` |
-| `setup_place_road(state, settlement_vid)` | Setup | `PlaceRoad` |
+| `setup_place_road(state, settlement_vertex_id)` | Setup | `PlaceRoad` |
 | `pre_roll_action(state)` | Start of turn | `RollDice` or `PlayKnight` |
-| `discard_cards(state, required)` | After 7 rolled | `DiscardCards` |
-| `move_robber(state)` | After knight/7 | `MoveRobber` |
+| `discard_cards(state, count)` | After 7 rolled | `DiscardCards` |
+| `move_robber(state)` | After knight / 7 | `MoveRobber` |
 | `take_turn(state)` | Main turn | Any valid action or `Pass` |
-| `respond_to_trade(state, offer)` | Any player's turn | `AcceptTrade` or `RejectTrade` |
+| `respond_to_trade(state, proposal)` | Any player's turn | `AcceptTrade` or `RejectTrade` |
 
 ---
 
 ### 2. Validate your bot
 
-Run the fixture test suite against your bot (31 tests covering every method and edge case):
-
 ```bash
-pytest catan/tests/test_dev_validator.py --player=submissions.my_bot:MyBot -v
+uv run pytest catan/tests/test_dev_validator.py --player=submissions.my_bot:MyBot -v
 ```
 
-Each failing test shows the scenario, what your bot returned, why it was rejected, and a hint to fix it.
+The local harness covers setup, robber movement, discards, dev card timing, trade responses, piece limits, and state immutability.
 
 ---
 
-### 3. Play a game
-
-Run your bot against the built-in reference bot and watch what happens:
+### 3. Run a game locally
 
 ```bash
-python -m catan.run catan/examples/four_basic_players.yaml
-# → writes tmp/games/<timestamp>.jsonl
+uv run python -m catan.run catan/examples/four_basic_players.yaml
 ```
 
-To mix your bot in, edit the YAML:
+To mix your own bot into a YAML:
 
 ```yaml
 players:
@@ -107,20 +180,22 @@ players:
 
 ---
 
-### 4. Watch the replay
+### 4. Watch replays
 
-Drag the `.jsonl` file into the hosted viewer at `https://catan.bot/viewer`.
+Drag a `.jsonl` replay into the public viewer at [https://catan.bot/viewer](https://catan.bot/viewer).
 
-- **Arrow keys** ← → step through actions frame by frame
-- **End** key jumps to the final game state
-- No login required
+Use:
+
+- left/right arrow keys to step through frames
+- End to jump to the final state
+- Batch Results to inspect full simulation folders
 
 ---
 
 ### 5. Simulate many games
 
 ```bash
-python -m catan.sim \
+uv run python -m catan.sim \
   --bot submissions.my_bot:MyBot \
   --bot basic:BasicPlayer \
   --games 200 \
@@ -128,52 +203,65 @@ python -m catan.sim \
   --save-logs
 ```
 
-```
+Example output:
+
+```text
 Results — 200 games, random boards
 Bot                       Games   Wins  Win%    Avg VP   Avg Place   1st   2nd   3rd   4th
 MyBot                       200     82  41.0%     7.6       1.8      41%   28%   21%   10%
 BasicPlayer                 200     38  19.0%     6.0       2.6      19%   24%   27%   30%
-
-Logs saved to: tmp/sim/run_20260419_120000/
-  View results: upload tmp/sim/run_20260419_120000/index.json to https://catan.bot/viewer → Batch Results
 ```
 
-**Key flags:**
+Useful flags:
 
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--games N` | 100 | Number of games |
 | `--workers N` | 1 | Parallel processes |
-| `--fixed-board` | off | Reuse one board across all games (isolates bot skill from board luck) |
+| `--fixed-board` | off | Reuse one board across all games |
 | `--board-seed N` | same as `--seed` | Seed for the fixed board |
 | `--save-logs` | off | Write per-game `.jsonl` files |
 | `--output FILE` | — | Write JSON summary to a file |
 
----
-
-### 6. Browse simulation results on the hosted viewer
-
-Upload the `tmp/sim/<run>/` folder (or just `index.json`) to the **Batch Results** tab at `https://catan.bot/viewer`:
-
-- Sortable/filterable table of all games with winner, VP, and turn count
-- Click any game to step through it frame by frame inline
+With `--save-logs`, upload `tmp/sim/<run>/` or `index.json` to [https://catan.bot/viewer](https://catan.bot/viewer).
 
 ---
 
-### 7. Package and register for the tournament
+### 6. Package and register for the tournament
 
 ```bash
-# Validate and package into a zip
-python -m catan.submit submissions.my_bot:MyBot    # → MyBot.zip
+uv run python -m catan.submit submissions.my_bot:MyBot
 
-# Upload to the tournament server
-python -m catan.register \
-  --username player1 \
+uv run python -m catan.register \
+  --token ctn_<your_token> \
   --zip MyBot.zip \
-  --name "My Bot v2"      # optional; defaults to zip filename stem
+  --name "My Bot v2"
 ```
 
-`catan.register` defaults to `https://catan.bot`, caches your JWT at `~/.catan/tokens.json`, and only needs your password once per day. Override the server with `--url` or `CATAN_SERVER_URL` when testing locally.
+You can also use username/password:
+
+```bash
+uv run python -m catan.register \
+  --username your_username \
+  --zip MyBot.zip
+```
+
+API tokens are created from the logged-in site at `Settings -> API Tokens`.
+
+---
+
+## Unsupported Dependencies
+
+Bot submissions are only allowed to import from the approved runtime dependency set. If you need a package that is not currently supported:
+
+1. open an issue or PR in `catan-sdk`
+2. explain the use case and why the dependency is needed for bots
+3. update both:
+   - `pyproject.toml` under `[project.optional-dependencies.bot-extras]`
+   - `catan/approved_imports.py`
+4. include any validator or packaging adjustments if the new dependency changes the bot author workflow
+
+That PR can then be reviewed for safety, footprint, and tournament compatibility before the dependency is made available to bot authors.
 
 ---
 
@@ -182,52 +270,46 @@ python -m catan.register \
 ```
 catan-sdk/
   submissions/
-    README.md              ← read this first
-    example_bot.py         ← minimal stub — copy and implement all 7 methods
-    heuristic_bot.py       ← advanced reference: strategic heuristic bot (~2.5× BasicPlayer win rate)
+    README.md              ← quick-start bot builder guide
+    example_bot.py         ← minimal stub — copy this first
+    heuristic_bot.py       ← advanced reference bot
+    planner_bot.py         ← planning-style reference bot
   catan/
-    player.py              ← Player ABC — implement this
-    models/                ← Pydantic v2 models (GameState, actions, enums, board)
+    player.py              ← Player ABC
+    models/                ← Pydantic v2 models
     engine/
-      engine.py            ← CatanEngine — runs a full game
+      engine.py            ← full game loop
       executor.py          ← state mutation functions
-      validator.py         ← action validation + resource cost constants
-      logger.py            ← GameLogger — writes JSONL replay files
-      dev_validator.py     ← 31 fixture tests for bot validation
-    board/                 ← board generation and topology
+      validator.py         ← action validation + cost helpers
+      dev_validator.py     ← bot validation harness
+      logger.py            ← JSONL replay logger
+    board/                 ← board generation + topology
     players/
-      basic_player.py      ← simple reference bot (builds city > settlement > road > dev card)
-      heuristic_bot.py     ← advanced reference (see submissions/heuristic_bot.py)
-      helpers.py           ← public utilities: vertex_pip_score, valid_settlement_spots, etc.
-      registry.py          ← local bot registry for YAML-driven games ("basic", "heuristic")
-    config.py              ← GameConfig, PlayerConfig (YAML → Pydantic)
-    run.py                 ← `python -m catan.run` CLI
-    sim.py                 ← `python -m catan.sim` batch simulation CLI
-    submit.py              ← `python -m catan.submit` bot packager
-    register.py            ← `python -m catan.register` tournament registration
-    tests/                 ← engine correctness tests
-    examples/
-      four_basic_players.yaml
-      heuristic_vs_basic.yaml  ← 1 HeuristicBot vs 3 BasicPlayers
+      basic_player.py      ← baseline legal bot
+      heuristic_bot.py     ← advanced reference implementation
+      helpers.py           ← public utilities for bot authors
+      registry.py          ← YAML short-name registry
+    run.py                 ← local game CLI
+    sim.py                 ← batch simulation CLI
+    submit.py              ← bot packaging CLI
+    register.py            ← tournament registration CLI
 ```
 
 ### Helper utilities
 
-`catan.players.helpers` exposes common board-query functions so you don't have to reimplement them:
-
 ```python
 from catan.players.helpers import (
-    vertex_pip_score,       # sum of pip weights at a vertex (use for placement scoring)
-    valid_settlement_spots, # vertices where you can build a settlement right now
-    valid_road_edges,       # edges where you can build a road right now
-    best_city_vertex,       # your most productive settlement to upgrade
-    has_resources,          # bool: can the player afford this cost?
-    resource_deficit,       # dict: resources still needed for a cost
+    vertex_pip_score,
+    valid_settlement_spots,
+    valid_road_edges,
+    best_city_vertex,
+    has_resources,
+    resource_deficit,
 )
 ```
 
 ---
 
-## Contributing to the engine
+## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md).
+See [CONTRIBUTING.md](CONTRIBUTING.md) if you want to contribute to the SDK itself.

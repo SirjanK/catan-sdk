@@ -54,9 +54,9 @@ python -m catan.register \
 
 ## Agent / Automation Notes
 
-When an agent (e.g., Claude Code) is running this workflow end-to-end, keep the following in mind:
+When an agent (e.g., Claude Code or Codex) is running this workflow end-to-end, keep the following in mind:
 
-- **`httpx` must be installed** before `catan.register` will work.  Add it with `uv add httpx` if the install errors out.
+- **`httpx` is a standard SDK dependency**. If `catan.register` throws an import error, run `uv sync` to realign the environment.
 - **Token-based auth is reliable for CI/agents** — use `--token ctn_...` to avoid interactive password prompts.  Generate tokens at `https://catan.bot/settings` → API Tokens.
 - **Default server**: `catan.register` uploads to `https://catan.bot` unless you pass `--url` or set `CATAN_SERVER_URL`.
 - **Two uploads under different names** use the same zip:
@@ -67,6 +67,7 @@ When an agent (e.g., Claude Code) is running this workflow end-to-end, keep the 
   ```
 
 - **Manual upload**: `python -m catan.submit` writes `<ClassName>.zip` in the current working directory.  Hand that file to the user to drag into the web UI.
+- **Hosted workflow**: after uploading, browse `https://catan.bot` for tournament status, registered bots, and replays.
 - **`uv run` vs direct python**: The project uses `uv`; always prefix commands with `uv run` (or `uv run pytest`, `uv run python -m ...`) unless you are inside the activated venv.
 - **VIRTUAL_ENV warning**: If you see `VIRTUAL_ENV=venv does not match ... .venv`, it is benign — uv resolves the right environment automatically.
 - **Fixture test count**: The test suite now has 33 checks (not 31 as some older docs say).
