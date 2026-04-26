@@ -1,31 +1,28 @@
 # Contributing to catan-sdk
 
-Thanks for your interest in contributing to the Catan engine. This guide is for contributors to the SDK itself — if you're building a bot, see `submissions/README.md` instead.
+Thanks for helping improve the public SDK. This guide is for contributors to the engine, models, helpers, validator, and bot-author tooling. If you want to write a bot instead, start with [README.md](README.md) or [submissions/README.md](submissions/README.md).
 
 ---
 
-## Reporting Bugs
+## What Belongs Here
 
-File an issue on [GitHub Issues](https://github.com/SirjanK/catan-sdk/issues). Include:
+Use `catan-sdk` for:
 
-- A minimal reproduction (YAML config + bot code, or a failing test)
-- What you expected vs. what happened
-- Python version and OS
+- game engine behavior
+- board/model/action definitions
+- public helper utilities for bot authors
+- `catan.submit`, `catan.register`, `catan.run`, and `catan.sim`
+- `DevValidator` behavior and bot-author-facing validation UX
+- approved bot runtime dependencies
 
----
+Use `TournamentEngine` for:
 
-## What belongs where
+- FastAPI backend routes and DB models
+- hosted frontend behavior
+- production deployment
+- tournament orchestration and worker infrastructure
 
-| Change | Repo |
-|--------|------|
-| Engine logic, models, board, validator, executor | `catan-sdk` (this repo) |
-| New Player methods or changes to the Player ABC | `catan-sdk` |
-| Test fixtures for bot validation (`dev_validator.py`) | `catan-sdk` |
-| Tournament orchestration, seeding rounds, Baranyai partition | `TournamentEngine` (private) |
-| FastAPI backend, auth, bot storage | `TournamentEngine` (private) |
-| React frontend, viz | `TournamentEngine` (private) |
-
-If you're unsure, open an issue first.
+If a change spans both repos, it is usually best to land the public SDK contract here first.
 
 ---
 
@@ -34,35 +31,72 @@ If you're unsure, open an issue first.
 ```bash
 git clone https://github.com/SirjanK/catan-sdk.git
 cd catan-sdk
-python -m venv venv && source venv/bin/activate
-pip install -e ".[dev]"
+uv sync --extra dev
 ```
 
-## Running Tests
+Common commands:
 
 ```bash
-pytest catan/tests/
-```
+# Full engine test suite
+uv run pytest catan/tests/
 
-The `test_viz_geometry.py` file is intentionally excluded from the default run (it tests frontend topology only). Skip it explicitly if needed:
+# Single file
+uv run pytest catan/tests/test_executor.py
 
-```bash
-pytest catan/tests/ --ignore=catan/tests/test_viz_geometry.py
+# Bot validator harness
+uv run pytest catan/tests/test_dev_validator.py --player=submissions.my_bot:MyBot -v
+
+# Package a sample bot
+uv run python -m catan.submit submissions.example_bot:ExampleBot
+
+# Inspect CLI docs
+uv run python -m catan.register --help
 ```
 
 ---
 
-## Code Style
+## Testing Expectations
 
-- **Python 3.11+**
-- **Pydantic v2** for all models
-- No external dependencies in the core engine (`catan/engine/`, `catan/models/`, `catan/board/`) beyond `pydantic` and `pyyaml`
-- Type annotations on all public functions
-- No `print()` in engine code — use `GameLogger` or return values
+Before opening a PR, run the narrowest relevant test slice and at least one of:
+
+```bash
+uv run pytest catan/tests/
+```
+
+or, for CLI / bot-author workflow changes:
+
+```bash
+uv run python -m catan.submit submissions.example_bot:ExampleBot
+uv run python -m catan.register --help
+```
+
+Notes:
+
+- `test_dev_validator.py` reports 33 pytest tests; internally that wraps 31 `DevValidator` checks plus harness coverage
+- `test_viz_geometry.py` is intentionally not part of the default test path
+
+---
+
+## Dependency Changes for Bots
+
+Bot submissions may only import approved dependencies. To add one:
+
+1. update `pyproject.toml` under `[project.optional-dependencies.bot-extras]`
+2. update `catan/approved_imports.py`
+3. explain the use case in the PR
+4. call out any tournament/runtime footprint concerns
+
+If the dependency meaningfully changes the author workflow, update the docs too.
+
+---
 
 ## PR Guide
 
-1. Fork the repo and create a branch: `git checkout -b fix/my-fix`
-2. Make your change with tests
-3. Ensure `pytest catan/tests/` passes fully
-4. Open a PR against `main` with a clear description of what changed and why
+Please include:
+
+- what changed
+- why it belongs in `catan-sdk`
+- what you tested
+- whether bot authors need to change anything
+
+Good PRs here usually optimize for bot-author clarity as much as raw engine correctness.
