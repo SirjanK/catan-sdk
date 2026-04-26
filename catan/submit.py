@@ -153,8 +153,12 @@ def main() -> None:
     zip_path = _create_zip(cls, module, out_dir)
     print(f"\nPackaged: {zip_path.resolve()}")
     print("Upload options:")
-    print(f"  CLI (recommended): python -m catan.register --url <tournament-url> --token ctn_<token> --zip {zip_path.name} --name \"<display name>\"")
-    print(f"  Web UI: drag-and-drop at <tournament-site>/bots → Add Bot")
+    print(
+        "  CLI (recommended): "
+        f"python -m catan.register --token ctn_<token> --zip {zip_path.name} "
+        '--name "<display name>"'
+    )
+    print("  Web UI: drag-and-drop at https://catan.bot/bots -> Add Bot")
 
 
 if __name__ == "__main__":
