@@ -567,7 +567,8 @@ class CatanEngine:
     def _run_turn(self, state: GameState, players: List[Player]) -> None:
         pid = state.current_player_id
         player = players[pid]
-        state.turn_actions = []   # reset at the start of each turn
+        state.turn_actions = []            # reset at the start of each turn
+        state.dev_cards_bought_this_turn = []
 
         if self._logger:
             self._logger.log_turn_state(state)
@@ -606,6 +607,7 @@ class CatanEngine:
         state.pending_trades = []
         state.trades_proposed_this_turn = 0
         state.turn_actions = []
+        state.dev_cards_bought_this_turn = []
         state.phase = GamePhase.PRE_ROLL
 
     # ------------------------------------------------------------------

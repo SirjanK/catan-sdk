@@ -180,6 +180,7 @@ def execute_buy_dev_card(
     player.dev_cards.append(card)
     player.dev_cards_count += 1
     state.dev_cards_remaining -= 1
+    state.dev_cards_bought_this_turn.append(card)
 
 
 # ---------------------------------------------------------------------------
