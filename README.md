@@ -49,7 +49,7 @@ Best references while iterating:
 uv run pytest catan/tests/test_dev_validator.py --player=submissions.my_bot:MyBot -v
 ```
 
-That pytest file runs **33 tests**, backed by **31 internal `DevValidator` checks**. All of them should pass before you upload.
+That validator harness should pass cleanly before you upload.
 
 ### Simulate
 
@@ -136,7 +136,7 @@ class MyBot(Player):
 
 The `GameState` passed to your bot is a deep copy. Opponent hands are hidden, but board state, piece counts, public VP, `resource_count`, and `dev_cards_count` are visible.
 
-### The 7 Player methods
+### Player methods
 
 | Method | Phase | Return type |
 |--------|-------|-------------|
@@ -170,9 +170,7 @@ To mix your own bot into a YAML:
 
 ```yaml
 players:
-  - type: custom
-    module: submissions.my_bot
-    class: MyBot
+  - type: submissions.my_bot:MyBot
   - type: basic
   - type: basic
   - type: basic
@@ -223,7 +221,7 @@ Useful flags:
 | `--save-logs` | off | Write per-game `.jsonl` files |
 | `--output FILE` | — | Write JSON summary to a file |
 
-With `--save-logs`, upload `tmp/sim/<run>/` or `index.json` to [https://catan.bot/viewer](https://catan.bot/viewer).
+With `--save-logs`, upload the full `tmp/sim/<run>/` directory contents to [https://catan.bot/viewer](https://catan.bot/viewer). The viewer needs `index.json` plus the per-game `.jsonl` files.
 
 ---
 

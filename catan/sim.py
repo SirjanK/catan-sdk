@@ -24,7 +24,7 @@ Usage::
       --save-logs --output results.json
 
     # View results: https://<tournament-site>/viewer → Batch Results tab
-    #   → upload tmp/sim/<run_id>/index.json
+    #   → upload the full tmp/sim/<run_id>/ directory contents
 """
 
 from __future__ import annotations
@@ -141,8 +141,8 @@ class SimulationResult:
         if self.log_dir:
             lines.append(f"\nLogs saved to: {self.log_dir}")
             lines.append(
-                f"  View results: upload {self.log_dir}/index.json to the "
-                f"tournament site's Viewer → Batch Results tab"
+                f"  View results: upload the full contents of {self.log_dir}/ "
+                f"to the tournament site's Viewer → Batch Results tab"
             )
         return "\n".join(lines)
 

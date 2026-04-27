@@ -10,12 +10,12 @@ Quick-start cheat sheet for humans and agents.  For the full guide see [CONTRIBU
 # 1. Copy the example stub
 cp submissions/example_bot.py submissions/my_bot.py
 
-# 2. Rename the class and implement all 7 methods
+# 2. Rename the class and implement the required player methods
 #    Reference implementation: catan/players/basic_player.py
 #    Advanced reference:       submissions/heuristic_bot.py
 #    Planning-style reference: submissions/planner_bot.py
 
-# 3. Run fixture tests (33 edge-case checks)
+# 3. Run the local validator harness
 pytest catan/tests/test_dev_validator.py --player=submissions.my_bot:MyBot -v
 
 # 4. Play a game and watch the replay
@@ -70,8 +70,6 @@ When an agent (e.g., Claude Code or Codex) is running this workflow end-to-end, 
 - **Hosted workflow**: after uploading, browse `https://catan.bot` for tournament status, registered bots, and replays.
 - **`uv run` vs direct python**: The project uses `uv`; always prefix commands with `uv run` (or `uv run pytest`, `uv run python -m ...`) unless you are inside the activated venv.
 - **VIRTUAL_ENV warning**: If you see `VIRTUAL_ENV=venv does not match ... .venv`, it is benign — uv resolves the right environment automatically.
-- **Fixture test count**: The test suite now has 33 checks (not 31 as some older docs say).
-
 ---
 
 ## Player API
@@ -110,7 +108,7 @@ state.pending_trades                # open proposals (List[TradeProposal])
 
 ## Validation
 
-The local harness (`DevValidator`) covers 33 fixture tests — setup, discard, robber, post-roll builds, dev cards, piece limits, ports, trade responses, and state immutability.  Run it before uploading:
+The local harness (`DevValidator`) covers setup, discard, robber, post-roll builds, dev cards, piece limits, ports, trade responses, and state immutability. Run it before uploading:
 
 ```bash
 pytest catan/tests/test_dev_validator.py --player=submissions.my_bot:MyBot -v

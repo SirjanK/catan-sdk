@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import sys
 import time
+from collections import Counter
 from pathlib import Path
 
 from catan.config import GameConfig
@@ -40,6 +41,17 @@ def run(config_path: str) -> None:
     engine = CatanEngine(config=config)
     logger = GameLogger(log_dir=config.log_dir)
 
+    raw_names = [pc.type for pc in config.players]
+    name_counts = Counter(raw_names)
+    name_seen: dict[str, int] = {}
+    player_names: list[str] = []
+    for raw in raw_names:
+        if name_counts[raw] > 1:
+            name_seen[raw] = name_seen.get(raw, 0) + 1
+            player_names.append(f"{raw}_{name_seen[raw]}")
+        else:
+            player_names.append(raw)
+
     player_summary = ", ".join(
         f"P{i}:{pc.type}" for i, pc in enumerate(config.players)
     )
@@ -57,7 +69,7 @@ def run(config_path: str) -> None:
     print()
 
     wall_t0 = time.perf_counter()
-    result = engine.run_game(players, logger=logger)
+    result = engine.run_game(players, logger=logger, player_names=player_names)
     wall_ms = (time.perf_counter() - wall_t0) * 1000.0
 
     print("Result")
