@@ -5,16 +5,26 @@ Run N games between specified bots and report win rates, average VP, and
 placement histograms.  Supports parallel execution and optional fixed-board
 mode for controlled A/B testing.
 
+Seating is shuffled each game by default so that no bot benefits from a
+fixed first-player position.  Pass ``--fix-order`` to keep the seating
+fixed (seat 0 = first --bot arg, etc.).
+
 Usage::
 
     # Basic: 100 games, BasicPlayer vs itself
     python -m catan.sim --bot basic:BasicPlayer --games 100
 
-    # Compare two bots, 4 workers
+    # Compare two bots, 4 workers (seating shuffled each game by default)
     python -m catan.sim \\
       --bot submissions.my_bot:MyBot \\
       --bot basic:BasicPlayer \\
       --games 200 --workers 4
+
+    # Fixed seating order (first --bot is always seat 0)
+    python -m catan.sim \\
+      --bot submissions.my_bot:MyBot \\
+      --bot basic:BasicPlayer \\
+      --games 200 --fix-order
 
     # Fixed board, save logs, write JSON results
     python -m catan.sim \\
@@ -179,6 +189,7 @@ def _run_single_game(
     seed: int,
     log_dir: Optional[str],
     board_state: Optional[bytes],  # pickled board JSON, or None
+    fix_order: bool = False,
 ) -> dict:
     """Run one game and return a metadata dict.
 
@@ -187,6 +198,7 @@ def _run_single_game(
     import importlib
     import json
     import os
+    import random as _random
     from catan.engine.engine import CatanEngine
     from catan.engine.logger import GameLogger
     from catan.models.board import Board
@@ -208,6 +220,15 @@ def _run_single_game(
                 ) from exc
         players.append(p)
         names.append(name)
+
+    # Shuffle seating order per-game so no bot has a structural first-player advantage.
+    # seat_order[player_id] = original_seat_index
+    seat_order = list(range(len(players)))
+    if not fix_order:
+        rng = _random.Random(seed)
+        rng.shuffle(seat_order)
+        players = [players[i] for i in seat_order]
+        names = [names[i] for i in seat_order]
 
     board = None
     if board_state is not None:
@@ -259,6 +280,8 @@ def _run_single_game(
         "final_vp": {str(k): v for k, v in final_vp.items()},
         "placements": [names[pid] for pid in range(len(names))],
         "placement_ranks": {str(pid): placements.get(pid, 4) for pid in range(len(names))},
+        # seat_order[player_id] = original_seat_index (0-3 per bot_specs order)
+        "seat_order": seat_order,
         "log_path": log_path,
     }
 
@@ -308,6 +331,7 @@ class SimulationRunner:
         fixed_board: bool = False,
         board_seed: Optional[int] = None,
         quiet: bool = False,
+        fix_order: bool = False,
     ) -> None:
         if not bots:
             raise ValueError("At least one bot must be provided")
@@ -324,6 +348,7 @@ class SimulationRunner:
         self._fixed_board = fixed_board
         self._board_seed = board_seed if board_seed is not None else seed_start
         self._quiet = quiet
+        self._fix_order = fix_order
 
     def run(self) -> SimulationResult:
         run_id = f"run_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
@@ -345,7 +370,7 @@ class SimulationRunner:
 
         # Build tasks
         tasks = [
-            (bot_specs, i, self._seed_start + i, run_log_dir, board_state)
+            (bot_specs, i, self._seed_start + i, run_log_dir, board_state, self._fix_order)
             for i in range(self._n_games)
         ]
 
@@ -378,22 +403,25 @@ class SimulationRunner:
         # Sort by game index for consistent output
         game_records.sort(key=lambda r: r["game_index"])
 
-        # Aggregate stats per bot (by seat index → display name)
+        # Aggregate stats per bot (by original seat index → display name).
+        # seat_order[player_id] = original_seat_index, so we remap each
+        # player_id back to the correct seat before crediting that seat's stats.
         seat_names = [name for name, _ in self._seats]
-        # Use seat index as key since names may repeat
         seat_stats: List[BotStats] = [BotStats(name=name) for name in seat_names]
 
         for rec in game_records:
             ranks = rec["placement_ranks"]
             final_vp = {int(k): v for k, v in rec["final_vp"].items()}
-            for seat_idx in range(4):
-                stat = seat_stats[seat_idx]
+            seat_order = rec.get("seat_order", list(range(4)))  # identity if missing
+            for player_id in range(4):
+                orig_seat = seat_order[player_id]
+                stat = seat_stats[orig_seat]
                 stat.games_played += 1
-                vp = final_vp.get(seat_idx, 0)
+                vp = final_vp.get(player_id, 0)
                 stat.total_vp += vp
-                rank = int(ranks.get(str(seat_idx), 4))
+                rank = int(ranks.get(str(player_id), 4))
                 stat.placement_counts[rank] = stat.placement_counts.get(rank, 0) + 1
-                if rec["winner_id"] == seat_idx:
+                if rec["winner_id"] == player_id:
                     stat.wins += 1
 
         sample_log: Optional[str] = None
@@ -487,6 +515,12 @@ def main(argv: Optional[List[str]] = None) -> None:
                         help="Write JSON results summary to this file.")
     parser.add_argument("--quiet", action="store_true",
                         help="Suppress progress bar.")
+    parser.add_argument("--fix-order", action="store_true",
+                        help=(
+                            "Keep seating order fixed (seat 0 = first --bot, etc.). "
+                            "By default, seating is shuffled each game to eliminate "
+                            "first-player-position bias."
+                        ))
 
     args = parser.parse_args(argv)
 
@@ -524,6 +558,7 @@ def main(argv: Optional[List[str]] = None) -> None:
         fixed_board=args.fixed_board,
         board_seed=args.board_seed,
         quiet=args.quiet,
+        fix_order=args.fix_order,
     )
 
     result = runner.run()

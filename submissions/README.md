@@ -120,13 +120,18 @@ The server re-runs the same checks plus an AST security scan on upload.
 
 ## Simulation
 
-`python -m catan.sim` runs N games and reports win rates, average VP, and placement histograms.  Useful flags:
+`python -m catan.sim` runs N games and reports win rates, average VP, and placement histograms.
+
+Seating is shuffled each game by default so that no bot benefits from a fixed first-player position.  Use `--fix-order` to pin seat 0 to the first `--bot` arg.
+
+Useful flags:
 
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--bot MODULE:CLASS` | required | Add a bot (repeat for multiple; seats filled with duplicates) |
 | `--games N` | 100 | Number of games |
 | `--workers N` | 1 | Parallel worker processes |
+| `--fix-order` | off | Keep seating fixed; default shuffles each game to remove first-player bias |
 | `--fixed-board` | off | Same board topology for all games |
 | `--save-logs` | off | Write per-game JSONL + `index.json` to `--log-dir` |
 | `--log-dir PATH` | `tmp/sim/` | Output directory when `--save-logs` is on |

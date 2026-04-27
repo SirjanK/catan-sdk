@@ -210,12 +210,15 @@ MyBot                       200     82  41.0%     7.6       1.8      41%   28%  
 BasicPlayer                 200     38  19.0%     6.0       2.6      19%   24%   27%   30%
 ```
 
+Seating is shuffled each game by default so that no bot benefits from a fixed first-player position. Use `--fix-order` to keep seat 0 = first `--bot` arg.
+
 Useful flags:
 
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--games N` | 100 | Number of games |
 | `--workers N` | 1 | Parallel processes |
+| `--fix-order` | off | Keep seating fixed (seat 0 = first `--bot`); default shuffles each game |
 | `--fixed-board` | off | Reuse one board across all games |
 | `--board-seed N` | same as `--seed` | Seed for the fixed board |
 | `--save-logs` | off | Write per-game `.jsonl` files |
