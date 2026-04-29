@@ -78,6 +78,11 @@ class Player(ABC):
         The game loop calls this repeatedly until the player returns Pass().
         A player may build, trade, or play dev cards in any order, subject
         to game rules enforced by the engine.
+
+        ``state.dev_cards_bought_this_turn`` lists any dev cards purchased
+        earlier this same turn.  The rules forbid playing a dev card on the
+        same turn it was bought, so bots should skip card types that appear
+        in that list when deciding whether to play a dev card.
         """
         ...
 

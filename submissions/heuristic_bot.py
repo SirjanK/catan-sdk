@@ -416,8 +416,15 @@ class HeuristicBot(Player):
         if accept is not None:
             return accept
 
+        # Cards bought this turn may not be played this turn (Catan rules).
+        bought_this_turn = set(state.dev_cards_bought_this_turn)
+
         # 3. Play Road Building when there are useful road targets
-        if not self._played_dev_card and DevCardType.ROAD_BUILDING in player.dev_cards:
+        if (
+            not self._played_dev_card
+            and DevCardType.ROAD_BUILDING in player.dev_cards
+            and DevCardType.ROAD_BUILDING not in bought_this_turn
+        ):
             rb = self._try_road_building(board, pid)
             if rb is not None:
                 self._played_dev_card = True
@@ -433,14 +440,24 @@ class HeuristicBot(Player):
                 return action
 
         # 6. Year of Plenty to fill the deficit (one dev card play per turn)
-        if goal_cost and not self._played_dev_card and DevCardType.YEAR_OF_PLENTY in player.dev_cards:
+        if (
+            goal_cost
+            and not self._played_dev_card
+            and DevCardType.YEAR_OF_PLENTY in player.dev_cards
+            and DevCardType.YEAR_OF_PLENTY not in bought_this_turn
+        ):
             yop = self._try_year_of_plenty(player, goal_cost)
             if yop is not None:
                 self._played_dev_card = True
                 return yop
 
         # 7. Monopoly when it would close the deficit
-        if goal_cost and not self._played_dev_card and DevCardType.MONOPOLY in player.dev_cards:
+        if (
+            goal_cost
+            and not self._played_dev_card
+            and DevCardType.MONOPOLY in player.dev_cards
+            and DevCardType.MONOPOLY not in bought_this_turn
+        ):
             mono = self._try_monopoly(state, player, goal_cost)
             if mono is not None:
                 self._played_dev_card = True
