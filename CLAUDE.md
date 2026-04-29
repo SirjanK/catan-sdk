@@ -45,13 +45,15 @@ catan-sdk/
     player.py          ← Player ABC
     models/            ← GameState, actions, enums, board
     engine/            ← game loop, validator, executor, logger
-    board/             ← topology and board generation
+    board/             ← topology, board generation, viz_topology (interactive board viz)
     players/           ← built-in bots and helper utilities
     run.py             ← local game CLI
     sim.py             ← simulation CLI
     submit.py          ← packaging CLI
     register.py        ← tournament registration CLI
 ```
+
+`catan/` has no `__init__.py` — it is a namespace package. TournamentEngine extends the same namespace with `catan/api/`, `catan/viz/` etc. from its own directory.
 
 ## Important Facts
 
