@@ -28,8 +28,9 @@ from catan.player import Player
 class ExampleBot(Player):
     """Replace this with your bot's name and strategy description."""
 
-    def __init__(self, player_id: int) -> None:
+    def __init__(self, player_id: int, seed: int = 0) -> None:
         self.player_id = player_id
+        self.seed = seed
 
     # ------------------------------------------------------------------
     # Setup phase — called twice per player (forward then backward)

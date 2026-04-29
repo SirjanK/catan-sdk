@@ -120,3 +120,7 @@ class GameState(BaseModel):
     longest_road_player: Optional[int] = None
     largest_army_player: Optional[int] = None
     turn_actions: List[str] = []
+    # Dev cards drawn by the current player during this turn's POST_ROLL phase.
+    # The validator uses this list to enforce the rule that a development card
+    # purchased this turn may not be played until next turn.
+    dev_cards_bought_this_turn: List[DevCardType] = []

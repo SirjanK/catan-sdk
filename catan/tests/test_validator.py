@@ -39,7 +39,7 @@ from catan.models.actions import (
     Settlement,
 )
 from catan.models.board import Building
-from catan.models.enums import BuildingType, DevCardType, GamePhase, ResourceType
+from catan.models.enums import BuildingType, DevCardType, GamePhase, PortType, ResourceType
 from catan.models.state import GameState, PlayerState, TradeProposal
 
 
@@ -524,3 +524,170 @@ class TestValidateBankTrade:
         ok, reason = validate_post_roll(state, 0, action, False)
         assert not ok
         assert "enough" in reason.lower()
+
+
+# ---------------------------------------------------------------------------
+# Bank trade — port ratios (2:1 specific, 3:1 generic)
+#
+# Deterministic board (randomize=False) port vertices:
+#   vertex  0 : SHEEP_2_1
+#   vertex  6 : GENERIC_3_1
+#   vertex 26 : WOOD_2_1
+# ---------------------------------------------------------------------------
+
+class TestBankTradePortRatios:
+    """Verify that specific 2:1 and generic 3:1 ports unlock the correct ratios."""
+
+    def _state_with_settlement_at(self, vertex_id: int) -> GameState:
+        state = _make_state(phase=GamePhase.POST_ROLL)
+        state.board.vertices[vertex_id].building = Building(
+            player_id=0, building_type=BuildingType.SETTLEMENT
+        )
+        return state
+
+    # --- 2:1 specific port ---
+
+    def test_specific_port_allows_2_to_1(self):
+        """Settlement on WOOD_2_1 port (v26) allows offering 2 WOOD."""
+        state = self._state_with_settlement_at(26)  # WOOD_2_1
+        state.players[0].resources[ResourceType.WOOD] = 2
+        state.players[0].resource_count = 2
+        action = BankTrade(
+            offering={ResourceType.WOOD: 2},
+            requesting={ResourceType.ORE: 1},
+        )
+        ok, reason = validate_post_roll(state, 0, action, False)
+        assert ok, reason
+
+    def test_specific_port_requires_exactly_2(self):
+        """Offering 3 or 4 WOOD when the ratio is 2:1 must be rejected."""
+        state = self._state_with_settlement_at(26)  # WOOD_2_1
+        state.players[0].resources[ResourceType.WOOD] = 4
+        state.players[0].resource_count = 4
+        for bad_amt in (3, 4):
+            action = BankTrade(
+                offering={ResourceType.WOOD: bad_amt},
+                requesting={ResourceType.ORE: 1},
+            )
+            ok, reason = validate_post_roll(state, 0, action, False)
+            assert not ok, f"Expected rejection for {bad_amt} WOOD with 2:1 port"
+            assert "ratio" in reason.lower()
+
+    def test_specific_port_other_resource_still_4_to_1(self):
+        """WOOD_2_1 port does not reduce the ratio for other resources."""
+        state = self._state_with_settlement_at(26)  # WOOD_2_1
+        state.players[0].resources[ResourceType.BRICK] = 4
+        state.players[0].resource_count = 4
+        # 3 BRICK should be rejected (no 3:1 or better port for BRICK)
+        action = BankTrade(
+            offering={ResourceType.BRICK: 3},
+            requesting={ResourceType.ORE: 1},
+        )
+        ok, reason = validate_post_roll(state, 0, action, False)
+        assert not ok
+        assert "ratio" in reason.lower()
+
+    def test_sheep_specific_port(self):
+        """Settlement on SHEEP_2_1 port (v0) allows offering 2 SHEEP."""
+        state = self._state_with_settlement_at(0)  # SHEEP_2_1
+        state.players[0].resources[ResourceType.SHEEP] = 2
+        state.players[0].resource_count = 2
+        action = BankTrade(
+            offering={ResourceType.SHEEP: 2},
+            requesting={ResourceType.ORE: 1},
+        )
+        ok, reason = validate_post_roll(state, 0, action, False)
+        assert ok, reason
+
+    # --- 3:1 generic port ---
+
+    def test_generic_port_allows_3_to_1_any_resource(self):
+        """Settlement on GENERIC_3_1 port (v6) allows 3:1 for any resource."""
+        state = self._state_with_settlement_at(6)  # GENERIC_3_1
+        for res in (ResourceType.WOOD, ResourceType.BRICK, ResourceType.WHEAT,
+                    ResourceType.ORE, ResourceType.SHEEP):
+            s = self._state_with_settlement_at(6)
+            s.players[0].resources[res] = 3
+            s.players[0].resource_count = 3
+            other = next(r for r in ResourceType if r != res and r != ResourceType.DESERT)
+            action = BankTrade(offering={res: 3}, requesting={other: 1})
+            ok, reason = validate_post_roll(s, 0, action, False)
+            assert ok, f"Expected 3:1 trade accepted for {res}: {reason}"
+
+    def test_generic_port_requires_exactly_3(self):
+        """Offering 2 or 4 when ratio is 3:1 must be rejected."""
+        state = self._state_with_settlement_at(6)  # GENERIC_3_1
+        state.players[0].resources[ResourceType.WOOD] = 4
+        state.players[0].resource_count = 4
+        for bad_amt in (2, 4):
+            action = BankTrade(
+                offering={ResourceType.WOOD: bad_amt},
+                requesting={ResourceType.ORE: 1},
+            )
+            ok, reason = validate_post_roll(state, 0, action, False)
+            assert not ok, f"Expected rejection for {bad_amt} with 3:1 port"
+            assert "ratio" in reason.lower()
+
+    def test_generic_port_does_not_override_specific_2_to_1(self):
+        """If a player has both generic 3:1 and specific 2:1 ports, the
+        best (2:1) applies for the matching resource."""
+        state = _make_state(phase=GamePhase.POST_ROLL)
+        # Give player settlements on both port types
+        state.board.vertices[6].building = Building(  # GENERIC_3_1
+            player_id=0, building_type=BuildingType.SETTLEMENT
+        )
+        state.board.vertices[26].building = Building(  # WOOD_2_1
+            player_id=0, building_type=BuildingType.SETTLEMENT
+        )
+        state.players[0].resources[ResourceType.WOOD] = 2
+        state.players[0].resource_count = 2
+        action = BankTrade(
+            offering={ResourceType.WOOD: 2},
+            requesting={ResourceType.ORE: 1},
+        )
+        ok, reason = validate_post_roll(state, 0, action, False)
+        assert ok, reason
+
+    # --- city on port vertex ---
+
+    def test_city_on_port_vertex_grants_port_benefit(self):
+        """A city on a port vertex must grant the same port ratio as a settlement."""
+        state = _make_state(phase=GamePhase.POST_ROLL)
+        state.board.vertices[26].building = Building(  # WOOD_2_1
+            player_id=0, building_type=BuildingType.CITY
+        )
+        state.players[0].resources[ResourceType.WOOD] = 2
+        state.players[0].resource_count = 2
+        action = BankTrade(
+            offering={ResourceType.WOOD: 2},
+            requesting={ResourceType.ORE: 1},
+        )
+        ok, reason = validate_post_roll(state, 0, action, False)
+        assert ok, reason
+
+    # --- no port — must use 4:1 ---
+
+    def test_no_port_requires_4_to_1(self):
+        """Without any port, every resource requires 4:1."""
+        state = _make_state(phase=GamePhase.POST_ROLL)
+        state.players[0].resources[ResourceType.WOOD] = 4
+        state.players[0].resource_count = 4
+        action = BankTrade(
+            offering={ResourceType.WOOD: 4},
+            requesting={ResourceType.ORE: 1},
+        )
+        ok, _ = validate_post_roll(state, 0, action, False)
+        assert ok
+
+    def test_no_port_3_to_1_rejected(self):
+        """Without a port, offering 3 is rejected even with 4 available."""
+        state = _make_state(phase=GamePhase.POST_ROLL)
+        state.players[0].resources[ResourceType.WOOD] = 4
+        state.players[0].resource_count = 4
+        action = BankTrade(
+            offering={ResourceType.WOOD: 3},
+            requesting={ResourceType.ORE: 1},
+        )
+        ok, reason = validate_post_roll(state, 0, action, False)
+        assert not ok
+        assert "ratio" in reason.lower()

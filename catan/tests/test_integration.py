@@ -602,3 +602,26 @@ class TestPreRollKnightWinRegression:
         assert len(calls) == 1, (
             f"Expected 1 turn (player 0 wins), but {len(calls)} turns ran: {calls}"
         )
+
+    def test_no_dice_roll_logged_after_winning_knight(self, tmp_path):
+        """A pre-roll winning knight must end the game before any dice are logged."""
+        engine, state, players = _make_knight_win_fixtures()
+        logger = GameLogger(log_dir=str(tmp_path))
+        engine._logger = logger
+        logger.start_game(seed=0, n_players=4, game_id="winning-knight")
+        logger.log_turn_state(state)
+
+        engine._run_turn(state, players)
+
+        logger.end_game(
+            winner_id=0,
+            winner_vp=true_vp(state, 0),
+            final_vp={p.player_id: true_vp(state, p.player_id) for p in state.players},
+            turn_number=state.turn_number,
+            hit_turn_limit=False,
+        )
+        records = _read_jsonl(tmp_path / "winning-knight.jsonl")
+
+        assert _records_of(records, "dice_roll") == []
+        actions = _records_of(records, "action")
+        assert [a["action"] for a in actions] == ["play_knight"]

@@ -112,8 +112,19 @@ def _has_resources(player_resources: Dict[ResourceType, int],
     return all(player_resources.get(r, 0) >= amt for r, amt in cost.items())
 
 
-def _road_connects_to_player(board: Board, player_id: int, edge_id: int) -> bool:
-    """True if placing a road on edge_id would be connected to player's network."""
+def _road_connects_to_player(
+    board: Board,
+    player_id: int,
+    edge_id: int,
+    extra_owned_edges: frozenset = frozenset(),
+) -> bool:
+    """True if placing a road on edge_id would be connected to player's network.
+
+    *extra_owned_edges* may include edge IDs not yet written to the board that
+    should be treated as if owned by *player_id* (used when validating the
+    second road of a Road Building card, where the first road is logically
+    placed but the board has not been mutated yet).
+    """
     edge = board.edges[edge_id]
     for vid in edge.vertex_ids:
         v = board.vertices[vid]
@@ -122,9 +133,14 @@ def _road_connects_to_player(board: Board, player_id: int, edge_id: int) -> bool
             return True
         # An adjacent road owned by the player (at this vertex, different edge)
         for adj_eid in v.adjacent_edge_ids:
-            if adj_eid != edge_id and board.edges[adj_eid].road_owner == player_id:
-                # Only valid if the vertex doesn't have an *opponent's* building
-                # blocking the connection (opponent settlement between your roads)
+            if adj_eid == edge_id:
+                continue
+            is_player_road = (
+                board.edges[adj_eid].road_owner == player_id
+                or adj_eid in extra_owned_edges
+            )
+            if is_player_road:
+                # Only valid if no opponent building blocks the connection
                 if v.building is None or v.building.player_id == player_id:
                     return True
     return False
@@ -377,11 +393,42 @@ def _validate_play_dev_card(
         return False, f"You do not have a {card} card"
     if card == DevCardType.KNIGHT:
         return False, "Knight must be played before rolling (use pre-roll action)"
+
+    # Cannot play a dev card purchased this turn (VP cards are exempt — they
+    # are revealed as points and carry no active effect).
+    if card != DevCardType.VICTORY_POINT:
+        bought_this_turn = state.dev_cards_bought_this_turn
+        bought_of_type = bought_this_turn.count(card)
+        in_hand = player.dev_cards.count(card)
+        # pre_existing = copies held before any purchase this turn
+        pre_existing = in_hand - bought_of_type
+        if pre_existing <= 0:
+            return False, "Cannot play a development card purchased this turn"
+
     if card == DevCardType.ROAD_BUILDING:
         road_ids = action.params.get("road_edge_ids", [])
         if not isinstance(road_ids, list) or len(road_ids) > 2:
             return False, "road_edge_ids must be a list of at most 2 edge IDs"
+        if len(road_ids) != len(set(road_ids)):
+            return False, "road_edge_ids contains duplicate edge IDs"
+        if len(road_ids) > player.roads_remaining:
+            return False, "Not enough road pieces remaining"
+        # Validate each road: exists, unoccupied, connected to player's network.
+        # The second road may connect to the first (not yet on the board).
+        extra: frozenset = frozenset()
+        for eid in road_ids:
+            ok, reason = _check_exists(state.board.edges, eid, "Edge")
+            if not ok:
+                return ok, reason
+            if state.board.edges[eid].road_owner is not None:
+                return False, f"Edge {eid} already has a road"
+            if not _road_connects_to_player(state.board, player.player_id, eid, extra):
+                return False, (
+                    f"Road on edge {eid} must connect to your existing roads or buildings"
+                )
+            extra = extra | {eid}
         return True, ""
+
     if card == DevCardType.YEAR_OF_PLENTY:
         resources = action.params.get("resources", [])
         if not isinstance(resources, list) or len(resources) != 2:
