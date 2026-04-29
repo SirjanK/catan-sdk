@@ -576,6 +576,12 @@ class CatanEngine:
         # --- PRE-ROLL ---
         roll, has_played_dev_card = self._do_pre_roll(state, player, pid)
 
+        # A pre-roll Knight can immediately win the game via Largest Army.
+        # End the turn before rolling dice or distributing resources.
+        if true_vp(state, pid) >= 10:
+            state.phase = GamePhase.GAME_OVER
+            return
+
         if self._logger:
             self._logger.log_dice(state.turn_number, pid, roll)
 
@@ -615,7 +621,7 @@ class CatanEngine:
     # ------------------------------------------------------------------
 
     def _do_pre_roll(self, state: GameState, player: Player, pid: int):
-        """Handle pre-roll actions; returns (roll_total, has_played_dev_card)."""
+        """Handle pre-roll actions; returns (roll_total | None, has_played_dev_card)."""
         has_played_dev_card = False
         invalid_count = 0
         timeout_s = self._get_timeout_s("PRE_ROLL")
@@ -672,6 +678,8 @@ class CatanEngine:
                     self._rng,
                 )
                 has_played_dev_card = True
+                if true_vp(state, pid) >= 10:
+                    return None, has_played_dev_card
                 # Loop back; next valid action must be RollDice
             else:
                 # RollDice
