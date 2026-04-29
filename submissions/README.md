@@ -13,7 +13,6 @@ cp submissions/example_bot.py submissions/my_bot.py
 # 2. Rename the class and implement the required player methods
 #    Reference implementation: catan/players/basic_player.py
 #    Advanced reference:       submissions/heuristic_bot.py
-#    Planning-style reference: submissions/planner_bot.py
 
 # 3. Run the local validator harness
 pytest catan/tests/test_dev_validator.py --player=submissions.my_bot:MyBot -v
@@ -141,13 +140,12 @@ With `--save-logs`, drag the output directory onto the **Batch Results** tab on 
 
 ### Interpreting results
 
-The sim outputs two rows per bot because it fills empty seats with duplicates.  Focus on the `Win%` and `Avg VP` columns.  A rough benchmark:
+The sim outputs two rows per bot because it fills empty seats with duplicates.  Focus on the `Win%` and `Avg VP` columns.  A rough benchmark (BasicPlayer vs HeuristicBot, 200 games, remaining seats filled with duplicates):
 
-| Bot | Typical Win% (4-player) |
-|-----|------------------------|
-| BasicPlayer | ~17 % |
-| PlannerBot | ~33 % |
-| HeuristicBot | ~37–41 % |
+| Bot | Win% | Avg VP |
+|-----|------|--------|
+| BasicPlayer | ~14 % | ~6.1 |
+| HeuristicBot | ~36 % | ~8.0 |
 
 ---
 
@@ -185,9 +183,8 @@ These are detected by an AST scan on the server.  Everything you need is availab
 | File | Description |
 |------|-------------|
 | `submissions/example_bot.py` | Minimal stub — copy this and fill in every method |
-| `catan/players/basic_player.py` | Simple legal bot (city > settlement > road > dev card); ~17% win rate |
-| `submissions/heuristic_bot.py` | **Advanced reference** — dev-card play, strategic trading, smart robber targeting; ~37–41% win rate |
-| `submissions/planner_bot.py` | **Planning reference** — commits to one goal and bank-trades toward it; ~33% win rate |
+| `catan/players/basic_player.py` | Simple legal bot (city > settlement > road > dev card); ~14% win rate vs HeuristicBot |
+| `submissions/heuristic_bot.py` | **Advanced reference** — dev-card play, strategic trading, smart robber targeting; ~36% win rate |
 
 ---
 

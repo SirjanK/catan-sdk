@@ -41,7 +41,6 @@ catan-sdk/
     README.md          ← bot-builder guide for humans and agents
     example_bot.py     ← minimal stub
     heuristic_bot.py   ← stronger reference bot
-    planner_bot.py     ← planning-style reference bot
   catan/
     player.py          ← Player ABC
     models/            ← GameState, actions, enums, board
@@ -70,7 +69,7 @@ When helping author a bot:
 
 1. start from `submissions/example_bot.py`
 2. use `catan/players/basic_player.py` for the simplest complete baseline
-3. use `submissions/heuristic_bot.py` and `submissions/planner_bot.py` for stronger patterns
+3. use `submissions/heuristic_bot.py` for stronger patterns
 4. keep the bot validator-clean at every step
 5. simulate against both `BasicPlayer` and `HeuristicBot`
 6. package with `catan.submit`
