@@ -41,7 +41,12 @@ def run(config_path: str) -> None:
     engine = CatanEngine(config=config)
     logger = GameLogger(log_dir=config.log_dir)
 
-    raw_names = [pc.type for pc in config.players]
+    raw_names = []
+    for pc in config.players:
+        if ":" in pc.type:
+            raw_names.append(pc.type.split(":")[1])
+        else:
+            raw_names.append(pc.type)
     name_counts = Counter(raw_names)
     name_seen: dict[str, int] = {}
     player_names: list[str] = []
