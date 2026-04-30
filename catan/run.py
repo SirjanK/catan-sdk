@@ -58,7 +58,7 @@ def run(config_path: str) -> None:
             player_names.append(raw)
 
     player_summary = ", ".join(
-        f"P{i}:{pc.type}" for i, pc in enumerate(config.players)
+        f"P{i}:{name}" for i, name in enumerate(player_names)
     )
 
     print("Catan Simulation")
